@@ -1,0 +1,56 @@
+[workspace]
+name = "mini-pi-plus-beyondmimic"
+version = "0.1.0"
+description = "BeyondMimic für HighTorque pi_plus, mit Pixi"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[system-requirements]
+libc = { family = "glibc", version = "2.35" }
+
+[pypi-options]
+extra-index-urls = ["https://pypi.nvidia.com"]
+no-build-isolation = ["flatdict"]
+dependency-overrides = { sentry-sdk = ">=2.0.0" }
+
+[dependencies]
+python = "3.11.*"
+pip = "*"
+setuptools = "<80" 
+packaging = "==23.0" 
+libstdcxx-ng = ">=12"
+libgcc-ng = ">=12"
+cmake = "*"
+git = "*"
+gxx = "12.*"
+
+[pypi-dependencies]
+"isaacsim" = { version = "==5.0.0", extras = ["all", "extscache"] }
+
+isaaclab        = { path = "../IsaacLab/source/isaaclab",        editable = true }
+isaaclab_assets = { path = "../IsaacLab/source/isaaclab_assets", editable = true }
+isaaclab_tasks  = { path = "../IsaacLab/source/isaaclab_tasks",  editable = true }
+isaaclab_rl     = { path = "../IsaacLab/source/isaaclab_rl",     editable = true }
+isaaclab_mimic  = { path = "../IsaacLab/source/isaaclab_mimic",  editable = true }
+
+rsl-rl-lib = "==2.3.1"
+whole_body_tracking = { path = "source/whole_body_tracking", editable = true }
+wandb = "*"
+
+[tasks]
+train   = "python scripts/rsl_rl/train.py"
+play    = "python scripts/rsl_rl/play.py"
+sim2sim = "python scripts/sim2sim.py"
+
+# --- Zweites Env für GMR-Retargeting (Python 3.10) ---
+[feature.gmr.dependencies]
+python = "3.10.*"
+pip = "*"
+libstdcxx-ng = ">=12"
+
+[feature.gmr.pypi-dependencies]
+general-motion-retargeting = { path = "GMR", editable = true }
+
+[environments]
+default = { solve-group = "main" }
+gmr = { features = ["gmr"], no-default-feature = true }
