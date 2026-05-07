@@ -1,4 +1,8 @@
-# Mini Pi Plus based on BeyondMimic 
+# Mini Pi Plus based on BeyondMimic
+
+> **Personal fork** of [HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic](https://github.com/HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic).
+> All credit for the original work goes to HighTorque Robotics and the upstream BeyondMimic authors.
+> This fork adds local pixi setup and experimentation; see commit history for changes.
 
 [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.0.0-silver.svg)](https://docs.isaacsim.omniverse.nvidia.com/5.0.0/installation/download.html)
 [![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.2.0-silver)](https://isaac-sim.github.io/IsaacLab/v2.2.0/index.html)

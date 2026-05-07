@@ -1,0 +1,32 @@
+# Pixi environment
+.pixi/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Training artefacts
+logs/
+outputs/
+wandb/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets / env
+.env
+.env.local
