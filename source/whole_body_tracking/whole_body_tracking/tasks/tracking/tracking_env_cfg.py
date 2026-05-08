@@ -1,11 +1,11 @@
-"""BeyondMimic全身动作跟踪环境配置文件
+"""BeyondMimic Full-Body Motion Tracking Environment Configuration File
 
-这个文件定义了人形机器人运动跟踪任务的完整配置，包括:
-- 场景设置（地形、照明、传感器）
-- MDP组件（观察、动作、奖励、终止条件）
-- 训练环境参数和随机化策略
+This file defines the complete configuration for a humanoid robot motion tracking task, including:
+- Scene setup (terrain, lighting, sensors)
+- MDP components (observations, actions, rewards, termination conditions)
+- Training environment parameters and randomization strategies
 
-基于Isaac Lab框架，使用强化学习训练机器人跟踪参考运动。
+Based on the Isaac Lab framework, this uses reinforcement learning to train the robot to track a reference motion
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
 
 ##
-# 预定义配置
+# Predefined configurations
 ##
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
@@ -35,90 +35,90 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 import whole_body_tracking.tasks.tracking.mdp as mdp
 
 ##
-# 场景定义
+# Scene Definition
 ##
 
-# 机器人速度扰动范围（用于域随机化）
-# 单位: 线速度(m/s), 角速度(rad/s)
+# Robot Speed Perturbation Range (for Domain Randomization)
+# Units: Linear velocity (m/s), Angular velocity (rad/s)
 VELOCITY_RANGE = {
-    "x": (-0.5, 0.5),      # 前后方向线速度
-    "y": (-0.5, 0.5),      # 左右方向线速度
-    "z": (-0.2, 0.2),      # 上下方向线速度
-    "roll": (-0.52, 0.52), # 翻滚角速度(约30度/秒)
-    "pitch": (-0.52, 0.52),# 俯仰角速度(约30度/秒)
-    "yaw": (-0.78, 0.78),  # 偏航角速度(约45度/秒)
+    "x": (-0.5, 0.5),      # Forward and backward linear velocity
+    "y": (-0.5, 0.5),      # Lateral linear velocity
+    "z": (-0.2, 0.2),      # Vertical linear velocity
+    "roll": (-0.52, 0.52), # Roll angular velocity (approximately 30 degrees per second)
+    "pitch": (-0.52, 0.52),# Pitch rate (approx. 30 degrees per second)
+    "yaw": (-0.78, 0.78),  # Yaw angular velocity (approximately 45 degrees per second)
 }
 
 
 @configclass
 class MySceneCfg(InteractiveSceneCfg):
-    """运动跟踪任务的场景配置
-    
-    包含地形、机器人、照明和传感器的完整场景设置。
+    """Scene Configuration for Motion Tracking Tasks
+
+    A complete scene setup that includes terrain, robots, lighting, and sensors.
     """
 
-    # 地面地形配置
+    # Ground Terrain Configuration
     terrain = TerrainImporterCfg(
-        prim_path="/World/ground",          # USD场景中的路径
-        terrain_type="plane",              # 平面地形类型
-        collision_group=-1,                # 碰撞组ID(-1表示与所有组碰撞)
+        prim_path="/World/ground",          # Paths in the USD scene
+        terrain_type="plane",              # Types of Flat Terrain
+        collision_group=-1,                # Collision group ID (-1 indicates collision with all groups)
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",  # 摩擦力组合模式
-            restitution_combine_mode="multiply", # 弹性恢复组合模式
-            static_friction=1.0,           # 静摩擦系数
-            dynamic_friction=1.0,          # 动摩擦系数
+            friction_combine_mode="multiply",  # Friction Combination Mode
+            restitution_combine_mode="multiply", # Elastic Recovery Combination Mode
+            static_friction=1.0,           # Coefficient of static friction
+            dynamic_friction=1.0,          # Coefficient of kinetic friction
         ),
         visual_material=sim_utils.MdlFileCfg(
             mdl_path="{NVIDIA_NUCLEUS_DIR}/Materials/Base/Architecture/Shingles_01.mdl",
-            project_uvw=True,              # 启用UV投影
+            project_uvw=True,              # Enable UV Projection
         ),
     )
-    # 机器人配置（将在具体任务中指定）
+    # Robot Configuration (to be specified in the specific task)
     robot: ArticulationCfg = MISSING
     
-    # 照明设置
+    # Lighting Setup
     light = AssetBaseCfg(
         prim_path="/World/light",
         spawn=sim_utils.DistantLightCfg(
-            color=(0.75, 0.75, 0.75),      # 光源颜色(RGB)
-            intensity=3000.0               # 光照强度
+            color=(0.75, 0.75, 0.75),      # Light Source Color (RGB)
+            intensity=3000.0               # Light intensity
         ),
     )
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",
         spawn=sim_utils.DomeLightCfg(
-            color=(0.13, 0.13, 0.13),      # 环境光颜色
-            intensity=1000.0               # 环境光强度
+            color=(0.13, 0.13, 0.13),      # Ambient light color
+            intensity=1000.0               # Ambient light intensity
         ),
     )
     
-    # 接触力传感器配置
+    # Contact Force Sensor Configuration
     contact_forces = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*", # 监测机器人所有部件的接触
-        history_length=3,                   # 保存3帧历史数据
-        track_air_time=True,                # 跟踪腾空时间
-        force_threshold=10.0,               # 接触力阈值(N)
-        debug_vis=True                      # 启用调试可视化
+        prim_path="{ENV_REGEX_NS}/Robot/.*", # Monitor the contact of all robot components
+        history_length=3,                   # Save the last 3 frames of data
+        track_air_time=True,                # Track flight time
+        force_threshold=10.0,               # Contact force threshold (N)
+        debug_vis=True                      # Enable debug visualization
     )
 
 
 ##
-# MDP设置 (马尔可夫决策过程)
+# MDP Settings (Markov Decision Process)
 ##
 
 
 @configclass
 class CommandsCfg:
-    """MDP命令规范配置
+    """MDP Command Specification Configuration
     
-    定义机器人需要跟踪的运动命令，包括参考动作的采样和随机化参数。
+    Define the motion commands the robot needs to follow, including sampling and randomization parameters for the reference motion.
     """
 
     motion = mdp.MotionCommandCfg(
-        asset_name="robot",                    # 目标资产名称
-        resampling_time_range=(1.0e9, 1.0e9), # 重采样时间范围(s) - 极大值表示不重采样
-        debug_vis=True,                       # 启用调试可视化
-        pose_range={                          # 姿态随机化范围
+        asset_name="robot",                    # Name of Target Asset
+        resampling_time_range=(1.0e9, 1.0e9), # Resampling time range (s) - The maximum value indicates no resampling
+        debug_vis=True,                       # Enable debug visualization
+        pose_range={                          # Range of pose randomization
             "x": (-0.05, 0.05),              # X方向位置偏移(m)
             "y": (-0.05, 0.05),              # Y方向位置偏移(m)
             "z": (-0.01, 0.01),              # Z方向位置偏移(m)
