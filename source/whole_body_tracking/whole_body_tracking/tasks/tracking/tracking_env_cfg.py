@@ -119,203 +119,203 @@ class CommandsCfg:
         resampling_time_range=(1.0e9, 1.0e9), # Resampling time range (s) - The maximum value indicates no resampling
         debug_vis=True,                       # Enable debug visualization
         pose_range={                          # Range of pose randomization
-            "x": (-0.05, 0.05),              # X方向位置偏移(m)
-            "y": (-0.05, 0.05),              # Y方向位置偏移(m)
-            "z": (-0.01, 0.01),              # Z方向位置偏移(m)
-            "roll": (-0.1, 0.1),             # 翻滚角偏移(rad)
-            "pitch": (-0.1, 0.1),            # 俯仰角偏移(rad)
-            "yaw": (-0.2, 0.2),              # 偏航角偏移(rad)
+            "x": (-0.05, 0.05),              # X-axis position offset (m)
+            "y": (-0.05, 0.05),              # Y-axis position offset (m)
+            "z": (-0.01, 0.01),              # Z-axis position offset (m)
+            "roll": (-0.1, 0.1),             # Roll angle offset (rad)
+            "pitch": (-0.1, 0.1),            # Pitch angle offset (rad)
+            "yaw": (-0.2, 0.2),              # Yaw angle offset (rad)
         },
-        velocity_range=VELOCITY_RANGE,        # 速度随机化范围
-        joint_position_range=(-0.1, 0.1),    # 关节位置随机化范围(rad)
+        velocity_range=VELOCITY_RANGE,        # Speed randomization range
+        joint_position_range=(-0.1, 0.1),    # Range of joint position randomization (rad)
     )
 
 
 @configclass
 class ActionsCfg:
-    """MDP动作规范配置
+    """MDP Motion Specification Configuration
     
-    定义机器人的控制动作空间，这里使用关节位置控制。
+    Defines the robot's control motion space; joint position control is used here
     """
 
     joint_pos = mdp.JointPositionActionCfg(
-        asset_name="robot",           # 目标机器人资产
-        joint_names=[".*"],          # 控制所有关节(正则表达式)
-        use_default_offset=True      # 使用默认关节位置作为偏移
+        asset_name="robot",           # Target Robotic Assets
+        joint_names=[".*"],          # Control all joints (regular expression)
+        use_default_offset=True      # Use the default joint positions as offsets
     )
 
 
 @configclass
 class ObservationsCfg:
-    """MDP观察规范配置
+    """MDP Observation Specification Configuration
     
-    定义策略网络和评论家网络的观察空间。策略观察包含噪声以提高sim-to-real转移性能。
+    Define the observation spaces for the policy network and the critic network. Policy observations include noise to improve the sim-to-real transfer performance.
     """
 
     @configclass
     class PolicyCfg(ObsGroup):
-        """策略网络观察组配置
+        """Policy Network Observation Set Configuration
         
-        包含有噪声的观察，用于训练鲁棒的策略。观察项顺序会被保持。
+        Contains noisy observations used to train robust policies. The order of the observations is preserved.
         """
 
-        # 观察项定义（保持顺序）
+        # Observation item definitions (keep order)
         command = ObsTerm(
             func=mdp.generated_commands, 
             params={"command_name": "motion"}
-        )  # 运动命令
+        )  # Movement Commands
         
         motion_anchor_pos_b = ObsTerm(
             func=mdp.motion_anchor_pos_b, 
             params={"command_name": "motion"}, 
-            noise=Unoise(n_min=-0.25, n_max=0.25)  # 锚点位置噪声
+            noise=Unoise(n_min=-0.25, n_max=0.25)  # Anchor point position noise
         )
         
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, 
             params={"command_name": "motion"}, 
-            noise=Unoise(n_min=-0.05, n_max=0.05)  # 锚点方向噪声
+            noise=Unoise(n_min=-0.05, n_max=0.05)  # Anchor-directional noise
         )
         
         base_lin_vel = ObsTerm(
             func=mdp.base_lin_vel, 
-            noise=Unoise(n_min=-0.5, n_max=0.5)    # 基座线速度噪声
+            noise=Unoise(n_min=-0.5, n_max=0.5)    # Base linear velocity noise
         )
         
         base_ang_vel = ObsTerm(
             func=mdp.base_ang_vel, 
-            noise=Unoise(n_min=-0.2, n_max=0.2)    # 基座角速度噪声
+            noise=Unoise(n_min=-0.2, n_max=0.2)    # Base angular velocity noise
         )
         
         joint_pos = ObsTerm(
             func=mdp.joint_pos_rel, 
-            noise=Unoise(n_min=-0.01, n_max=0.01)  # 关节位置噪声
+            noise=Unoise(n_min=-0.01, n_max=0.01)  # Joint Position Noise
         )
         
         joint_vel = ObsTerm(
             func=mdp.joint_vel_rel, 
-            noise=Unoise(n_min=-0.5, n_max=0.5)    # 关节速度噪声
+            noise=Unoise(n_min=-0.5, n_max=0.5)    # Joint velocity noise
         )
         
-        actions = ObsTerm(func=mdp.last_action)  # 上一步动作
+        actions = ObsTerm(func=mdp.last_action)  # Previous step
 
         def __post_init__(self):
-            self.enable_corruption = True      # 启用观察破坏（噪声）
-            self.concatenate_terms = True      # 将所有观察项连接为一个向量
+            self.enable_corruption = True      # Enable observation of disruptions (noise)
+            self.concatenate_terms = True      # Combine all observations into a single vector
 
     @configclass
     class PrivilegedCfg(ObsGroup):
-        """特权观察组配置（评论家网络）
+        """Privileged Observation Set Configuration (Critic Network)
         
-        包含无噪声的精确观察，以及额外的特权信息（如身体位置/方向）。
-        用于训练评论家网络进行价值函数估计。
+        Contains noise-free, precise observations, as well as additional privileged information (such as body position/orientation).
+        Used to train the critic network for value function estimation.
         """
         
         command = ObsTerm(
             func=mdp.generated_commands, 
             params={"command_name": "motion"}
-        )  # 运动命令（无噪声）
+        )  # Motion command (silent)
         
         motion_anchor_pos_b = ObsTerm(
             func=mdp.motion_anchor_pos_b, 
             params={"command_name": "motion"}
-        )  # 锚点位置（无噪声）
+        )  # Anchor position (noise-free)
         
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, 
             params={"command_name": "motion"}
-        )  # 锚点方向（无噪声）
+        )  # Anchor Direction (No Noise)
         
         body_pos = ObsTerm(
             func=mdp.robot_body_pos_b, 
             params={"command_name": "motion"}
-        )  # 机器人身体位置（特权信息）
+        )  # Robot Body Position (Privileged Information)
         
         body_ori = ObsTerm(
             func=mdp.robot_body_ori_b, 
             params={"command_name": "motion"}
-        )  # 机器人身体方向（特权信息）
+        )  # Robot Body Orientation (Privileged Information)
         
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)     # 基座线速度（无噪声）
-        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)     # 基座角速度（无噪声）
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel)       # 关节位置（无噪声）
-        joint_vel = ObsTerm(func=mdp.joint_vel_rel)       # 关节速度（无噪声）
-        actions = ObsTerm(func=mdp.last_action)           # 上一步动作
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)     # Base linear velocity (noise-free)
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)     # Base angular velocity (noise-free)
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)       # Joint position (no noise)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)       # Joint speed (noise-free)
+        actions = ObsTerm(func=mdp.last_action)           # Previous step
 
-    # 观察组实例
-    policy: PolicyCfg = PolicyCfg()        # 策略网络观察
-    critic: PrivilegedCfg = PrivilegedCfg() # 评论家网络观察
+    # Observation Group Examples
+    policy: PolicyCfg = PolicyCfg()
+    critic: PrivilegedCfg = PrivilegedCfg() # Critics' Online Observations
 
 
 @configclass
 class EventCfg:
-    """事件配置
+    """Event Configuration
     
-    定义域随机化事件，用于提高策略的泛化能力和sim-to-real转移性能。
-    包括启动时和训练过程中的随机化事件。
+    Define domain randomization events to improve the policy's generalization ability and sim-to-real transfer performance.
+    This includes randomization events that occur at startup and during training.
     """
 
-    # 启动时事件
+    # On startup
     physics_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
-        mode="startup",                    # 在每个episode开始时执行
+        mode="startup",                    # Execute at the beginning of each episode
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.3, 1.6),    # 静摩擦系数范围
-            "dynamic_friction_range": (0.3, 1.2),   # 动摩擦系数范围
-            "restitution_range": (0.0, 0.5),        # 弹性恢复系数范围
-            "num_buckets": 64,                      # 随机化桶数量
+            "static_friction_range": (0.3, 1.6),    # Static friction
+            "dynamic_friction_range": (0.3, 1.2),   # Dynamic friction
+            "restitution_range": (0.0, 0.5),        # Restitution coefficient range
+            "num_buckets": 64,                      # Number of randomization buckets
         },
     )
 
     add_joint_default_pos = EventTerm(
         func=mdp.randomize_joint_default_pos,
-        mode="startup",                              # 启动时执行
+        mode="startup",                              # Execute at startup
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"]),
-            "pos_distribution_params": (-0.01, 0.01), # 关节默认位置随机化范围(rad)
-            "operation": "add",                       # 加法操作
+            "pos_distribution_params": (-0.01, 0.01), # Joint default position randomization range (rad)
+            "operation": "add",                       # Addition operation
         },
     )
 
     base_com = EventTerm(
         func=mdp.randomize_rigid_body_com,
-        mode="startup",                              # 启动时执行
+        mode="startup",                              # Execute at startup
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "com_range": {                           # 质心随机化范围(m)
-                "x": (-0.025, 0.025),               # X方向质心偏移
-                "y": (-0.05, 0.05),                 # Y方向质心偏移
-                "z": (-0.05, 0.05)                  # Z方向质心偏移
+            "com_range": {                          # Center of mass randomization range (m)
+                "x": (-0.025, 0.025),               # Center of mass offset in the X direction
+                "y": (-0.05, 0.05),                 # Center of mass offset in the Y direction
+                "z": (-0.05, 0.05)                  # Center of mass offset in the Z direction
             },
         },
     )
 
-    # 间隔事件 - 传统推动（对所有环境）
+    # Interval Event - Traditional Push (for all environments)
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
-        mode="interval",                         # 间隔执行模式
-        interval_range_s=(1.0, 3.0),           # 执行间隔范围(s)
-        params={"velocity_range": VELOCITY_RANGE}, # 推力速度范围
+        mode="interval",                        # Interval execution mode
+        interval_range_s=(1.0, 3.0),            # Execution interval range (s)
+        params={"velocity_range": VELOCITY_RANGE}, # Thrust velocity range
     )
 
 @configclass
 class RewardsCfg:
-    """MDP奖励项配置
+    """MDP Reward Configuration
     
-    定义运动跟踪任务的奖励函数，包括位置、方向、速度跟踪奖励和行为惩罚。
-    使用指数衰减奖励函数以实现精确跟踪。
+    Define the reward function for the motion tracking task, including rewards for position, orientation, and velocity tracking, as well as penalties for behavior.
+    Use an exponentially decaying reward function to achieve precise tracking.
     """
 
-    # DeepMimic风格的运动跟踪奖励
+    # DeepMimic-style motion tracking reward
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
-        weight=0.5,                           # 奖励权重
+        weight=0.5,                           # Reward weight
         params={
             "command_name": "motion", 
-            "std": 0.3                        # 标准差参数，控制奖励衰减速度
+            "std": 0.3                        # Standard deviation parameter, controls the rate of reward decay
         },
-    )  # 全局锚点位置跟踪奖励
+    )  #  Global anchor position tracking reward
     
     motion_global_anchor_ori = RewTerm(
         func=mdp.motion_global_anchor_orientation_error_exp,
@@ -324,7 +324,7 @@ class RewardsCfg:
             "command_name": "motion", 
             "std": 0.4
         },
-    )  # 全局锚点方向跟踪奖励
+    )  # Global Anchor Direction Tracking Reward
     
     motion_body_pos = RewTerm(
         func=mdp.motion_relative_body_position_error_exp,
@@ -333,7 +333,7 @@ class RewardsCfg:
             "command_name": "motion", 
             "std": 0.3
         },
-    )  # 相对身体位置跟踪奖励
+    )  # Relative Body Position Tracking Reward
     
     motion_body_ori = RewTerm(
         func=mdp.motion_relative_body_orientation_error_exp,
@@ -342,7 +342,7 @@ class RewardsCfg:
             "command_name": "motion", 
             "std": 0.4
         },
-    )  # 相对身体方向跟踪奖励
+    )  # Relative Body Orientation Tracking Reward
     
     motion_body_lin_vel = RewTerm(
         func=mdp.motion_global_body_linear_velocity_error_exp,
@@ -351,7 +351,7 @@ class RewardsCfg:
             "command_name": "motion", 
             "std": 1.0
         },
-    )  # 全局身体线速度跟踪奖励
+    )  # Global Body Velocity Tracking Reward
     
     motion_body_ang_vel = RewTerm(
         func=mdp.motion_global_body_angular_velocity_error_exp,
@@ -360,135 +360,135 @@ class RewardsCfg:
             "command_name": "motion", 
             "std": 3.14
         },
-    )  # 全局身体角速度跟踪奖励
-    # 行为正则化惩罚项
+    )  # Global body angular velocity tracking reward
+    # Behavior regularization penalty term
     action_rate_l2 = RewTerm(
         func=mdp.action_rate_l2, 
-        weight=-1e-1                          # 负权重表示惩罚
-    )  # 动作变化率L2惩罚，鼓励平滑动作
+        weight=-1e-1                          # Negative weight indicates a penalty
+    )  # L2 penalty on action rate, encouraging smooth actions
     
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-10.0,                         # 强惩罚
+        weight=-10.0,                         # severe punishment
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])
         },
-    )  # 关节限位惩罚，防止关节超出安全范围
+    )  # Joint limit detection to prevent joints from moving beyond their safe range
     
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-0.1,                          # 接触惩罚权重
+        weight=-0.1,                          # Contact penalty weight
         params={
             "sensor_cfg": SceneEntityCfg(
                 "contact_forces",
                 body_names=[
-                    # 正则表达式：排除脚踝和手腕的所有body
+                    # Regular expression: Exclude all “body” elements from the ankles and wrists
                     r"^(?!left_ankle_roll_link$)(?!right_ankle_roll_link$)(?!left_wrist_yaw_link$)(?!right_wrist_yaw_link$).+$"
                 ],
             ),
-            "threshold": 1.0,                 # 接触力阈值(N)
+            "threshold": 1.0,                 # Contact force threshold (N)
         },
-    )  # 不期望接触惩罚，避免非末端执行器接触地面
+    )  # Avoid contact with the penalty zone; ensure that non-end effectors do not touch the ground
 
 @configclass
 class TerminationsCfg:
-    """MDP终止条件配置
+    """MDP Termination Condition Configuration
     
-    定义episode提前结束的条件，用于避免危险状态和无效训练数据。
+    Define the conditions under which an episode ends early to avoid dangerous states and invalid training data.
     """
 
     time_out = DoneTerm(
         func=mdp.time_out, 
-        time_out=True                         # 标记为超时终止
-    )  # 时间超时终止
+        time_out=True                         # Marked as terminated due to timeout
+    )  # Terminated due to timeout
     
     anchor_pos = DoneTerm(
         func=mdp.bad_anchor_pos_z_only,
         params={
             "command_name": "motion", 
-            "threshold": 0.25                 # Z方向位置偏差阈值(m)
+            "threshold": 0.25                 # Z-axis position deviation threshold (m)
         },
-    )  # 锚点位置偏差过大终止（仅检查Z方向）
+    )  # Terminate due to excessive anchor point deviation (check Z-axis only)
     
     anchor_ori = DoneTerm(
         func=mdp.bad_anchor_ori,
         params={
             "asset_cfg": SceneEntityCfg("robot"), 
             "command_name": "motion", 
-            "threshold": 0.8                  # 方向偏差阈值
+            "threshold": 0.8                  # Directional deviation threshold
         },
-    )  # 锚点方向偏差过大终止（防止机器人倾倒）
+    )  # Terminate due to excessive deviation in anchor point direction (to prevent the robot from tipping over)
     
     ee_body_pos = DoneTerm(
         func=mdp.bad_motion_body_pos_z_only,
         params={
             "command_name": "motion",
-            "threshold": 0.25,                # 末端执行器位置偏差阈值(m)
-            "body_names": [                   # 监控的末端执行器
-                "left_ankle_roll_link",       # 左脚踝
-                "right_ankle_roll_link",      # 右脚踝
-                "left_wrist_yaw_link",        # 左手腕
-                "right_wrist_yaw_link",       # 右手腕
+            "threshold": 0.25,                # End-effector position deviation threshold (m)
+            "body_names": [                   # End-effectors to monitor
+                "left_ankle_roll_link",       # Left ankle
+                "right_ankle_roll_link",      # Right ankle
+                "left_wrist_yaw_link",        # Left wrist
+                "right_wrist_yaw_link",       # Right wrist
             ],
         },
-    )  # 末端执行器位置偏差过大终止
+    )  # Terminate if end-effector position deviation is too large
 
 @configclass
 class CurriculumCfg:
-    """MDP课程学习配置
+    """MDP Policy Learning Configuration
     
-    定义训练过程中的课程学习策略，可以逐步增加任务难度。
-    包含力课程学习等自适应训练策略。
+    Define policy learning strategies for the training process, allowing you to gradually increase the difficulty of the task.
+    Includes adaptive training strategies such as force-based policy learning.
     """
 
-    # 力课程学习项 - 根据机器人表现动态调整辅助力
+    # Force-based Learning Module - Dynamically Adjusting Assistive Force Based on Robot Performance
     pass
 
 ##
-# 环境配置
+# Environment Configuration
 ##
 
 @configclass
 class TrackingEnvCfg(ManagerBasedRLEnvCfg):
-    """运动跟踪环境配置
+    """Motion Tracking Environment Configuration
     
-    整合所有MDP组件的完整环境配置，用于训练人形机器人跟踪参考运动。
-    基于Isaac Lab的ManagerBasedRLEnv框架。
+    A complete environment configuration that integrates all MDP components for training humanoid robots to track reference motions.
+    Based on the ManagerBasedRLEnv framework from Isaac Labs.
     """
 
-    # 场景设置
+    # Scene Configuration
     scene: MySceneCfg = MySceneCfg(
-        num_envs=4096,                        # 并行环境数量
-        env_spacing=2.5                      # 环境间距(m)
+        num_envs=4096,                        # Number of parallel environments
+        env_spacing=2.5                      # Distance between environments (m)
     )
     
-    # 基础MDP组件
-    observations: ObservationsCfg = ObservationsCfg()  # 观察空间配置
-    actions: ActionsCfg = ActionsCfg()                  # 动作空间配置
-    commands: CommandsCfg = CommandsCfg()               # 命令配置
+    # Basic MDP Components
+    observations: ObservationsCfg = ObservationsCfg()  #  Observation space configuration
+    actions: ActionsCfg = ActionsCfg()                  # Action space configuration
+    commands: CommandsCfg = CommandsCfg()               # Command configuration
     
-    # MDP行为定义
-    rewards: RewardsCfg = RewardsCfg()                  # 奖励函数配置
-    terminations: TerminationsCfg = TerminationsCfg()   # 终止条件配置
-    events: EventCfg = EventCfg()                       # 随机化事件配置
-    curriculum: CurriculumCfg = CurriculumCfg()         # 课程学习配置
+    #  MDP Behavior Definitions
+    rewards: RewardsCfg = RewardsCfg()                  # Reward function configuration
+    terminations: TerminationsCfg = TerminationsCfg()   # Termination condition configuration
+    events: EventCfg = EventCfg()                       # Randomized event configuration
+    curriculum: CurriculumCfg = CurriculumCfg()         # Curriculum learning configuration
 
     def __post_init__(self):
-        """后初始化配置
+        """Post-initialization configuration
         
-        设置仿真参数、渲染设置和查看器配置。
+        Set simulation parameters, rendering settings, and viewer configuration.
         """
-        # 通用设置
-        self.decimation = 4                   # 控制频率抽取率 (仿真50Hz → 控制12.5Hz)
-        self.episode_length_s = 10.0          # Episode时长(s)
+        # General settings
+        self.decimation = 4                   # Control frequency decimation rate (simulation 50Hz → control 12.5Hz)
+        self.episode_length_s = 10.0          # Episode duration (s)
         
-        # 仿真设置
-        self.sim.dt = 0.005                   # 仿真时间步长(s) = 200Hz
-        self.sim.render_interval = self.decimation  # 渲染间隔
-        self.sim.physics_material = self.scene.terrain.physics_material  # 物理材质
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15  # GPU刚体patch最大数量
+        # Simulation settings
+        self.sim.dt = 0.005                   # Simulation time step (s) = 200Hz
+        self.sim.render_interval = self.decimation  # Render interval
+        self.sim.physics_material = self.scene.terrain.physics_material  # Physics material
+        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15  # Maximum number of GPU rigid body patches
         
-        # 查看器设置
-        self.viewer.eye = (1.5, 1.5, 1.5)    # 相机位置
-        self.viewer.origin_type = "asset_root" # 相机原点类型
-        self.viewer.asset_name = "robot"      # 跟随的资产名称
+        # Viewer settings
+        self.viewer.eye = (1.5, 1.5, 1.5)    #  Camera position
+        self.viewer.origin_type = "asset_root" # Camera origin type
+        self.viewer.asset_name = "robot"      # Name of the asset to follow
