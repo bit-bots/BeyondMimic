@@ -36,6 +36,8 @@ isaaclab_mimic  = { path = "../IsaacLab/source/isaaclab_mimic",  editable = true
 rsl-rl-lib = "==2.3.1"
 whole_body_tracking = { path = "source/whole_body_tracking", editable = true }
 wandb = "*"
+pandas = "*"
+rich = "*"
 
 [tasks]
 train   = "python scripts/rsl_rl/train.py"

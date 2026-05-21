@@ -28,13 +28,11 @@ class PIPLUSFlatEnvCfg(TrackingEnvCfg):
             "r_hip_roll_link",
             "r_calf_link",
             "r_ankle_roll_link",
-            
+
             "l_shoulder_roll_link",
             "l_elbow_link",
-            "l_wrist_link",
             "r_shoulder_roll_link",
             "r_elbow_link",
-            "r_wrist_link",
         ]
         
         # 相机设置：自由视角，不跟随机器人
@@ -52,15 +50,15 @@ class PIPLUSFlatEnvCfg(TrackingEnvCfg):
         self.rewards.motion_body_pos.params["std"] = 0.15  # 从1.0增加到1.5
 
         self.terminations.ee_body_pos.params["body_names"] = [
-            "l_ankle_roll_link",  # HI机器人的脚踝
-            "r_ankle_roll_link", 
-            "l_wrist_link",      # HI机器人的手腕（注意名称不同）
-            "r_wrist_link",
+            "l_ankle_roll_link",
+            "r_ankle_roll_link",
+            "l_elbow_link",      # bitbots: wrist_link merged into elbow (fixed joint)
+            "r_elbow_link",
         ]
         self.rewards.undesired_contacts.params["sensor_cfg"] = SceneEntityCfg(
             "contact_forces",
             body_names=[
-                r"^(?!l_ankle_roll_link$)(?!r_ankle_roll_link$)(?!l_wrist_link$)(?!r_wrist_link$).+$"
+                r"^(?!l_ankle_roll_link$)(?!r_ankle_roll_link$)(?!l_elbow_link$)(?!r_elbow_link$).+$"
             ],
         )
         # 如需演示模式，请使用 Tracking-Flat-PI-Plus-Play-v0

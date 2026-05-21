@@ -26,6 +26,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import math
 import numpy as np
 import os
 
@@ -173,13 +174,18 @@ ROBOT_CONFIGS = {
             "l_shoulder_roll_joint",
             "l_upper_arm_joint",
             "l_elbow_joint",
-            "l_wrist_joint",
             "r_shoulder_pitch_joint",
             "r_shoulder_roll_joint",
             "r_upper_arm_joint",
             "r_elbow_joint",
-            "r_wrist_joint",
-        ]
+        ],
+        # Compensate for bitbots URDF shoulder joint-frame rpy (90° offset vs GMR convention)
+        "joint_offsets": {
+            "l_shoulder_pitch_joint": -math.pi / 2,
+            "l_shoulder_roll_joint":  -math.pi / 2,
+            "r_shoulder_pitch_joint": -math.pi / 2,
+            "r_shoulder_roll_joint":  +math.pi / 2,
+        },
     },
     # "pi_plus_head": {
     #     "cfg": PI_PLUS80_WAIST_shell_CFG,
@@ -320,6 +326,15 @@ class MotionLoader:
             self.motion_dof_poss_input = motion[:, dof_slice[0]:dof_slice[1]]
         else:
             self.motion_dof_poss_input = motion[:, 7:]
+
+        # Apply per-joint constant offsets from robot_config (compensates URDF joint-frame rpy vs GMR convention)
+        joint_offsets = self.robot_config.get("joint_offsets", None)
+        if joint_offsets:
+            joint_names = self.robot_config["joint_names"]
+            for jname, off in joint_offsets.items():
+                idx = joint_names.index(jname)
+                self.motion_dof_poss_input[:, idx] += off
+            print(f"Applied joint offsets: {joint_offsets}")
 
         self.input_frames = motion.shape[0]
         self.duration = (self.input_frames - 1) * self.input_dt
