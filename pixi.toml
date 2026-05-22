@@ -53,6 +53,16 @@ libstdcxx-ng = ">=12"
 [feature.gmr.pypi-dependencies]
 general-motion-retargeting = { path = "GMR", editable = true }
 
+# --- Drittes Env für Blackwell-GPUs (RTX 50xx, sm_120): Torch auf CUDA 12.8 ---
+# Identisch zu `default`, nur Torch/Vision/Audio aus dem cu128-Index (enthält sm_120-Kernel).
+# Default-Build (cu126 von PyPI) kann auf der 5090 keine Kernel ausführen.
+# Nutzung auf der 5090:  pixi run -e 5090 train ...
+[feature.cu128.pypi-dependencies]
+torch       = { version = "==2.7.0",  index = "https://download.pytorch.org/whl/cu128" }
+torchvision = { version = "==0.22.0", index = "https://download.pytorch.org/whl/cu128" }
+torchaudio  = { version = "==2.7.0",  index = "https://download.pytorch.org/whl/cu128" }
+
 [environments]
 default = { solve-group = "main" }
 gmr = { features = ["gmr"], no-default-feature = true }
+"5090" = { features = ["cu128"] }
