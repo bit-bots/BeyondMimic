@@ -1,105 +1,167 @@
 # Mini Pi Plus based on BeyondMimic
 
-> **Personal fork** of [HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic](https://github.com/HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic).
-> All credit for the original work goes to HighTorque Robotics and the upstream BeyondMimic authors.
-> This fork adds local pixi setup and experimentation; see commit history for changes.
-
 [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.0.0-silver.svg)](https://docs.isaacsim.omniverse.nvidia.com/5.0.0/installation/download.html)
 [![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.2.0-silver)](https://isaac-sim.github.io/IsaacLab/v2.2.0/index.html)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://docs.python.org/3/whatsnew/3.11.html)
+[![Pixi](https://img.shields.io/badge/pixi-managed-orange.svg)](https://pixi.sh)
 [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/20.04/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/license/mit)
+
 ![gif](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/6363667a0f27da450e1059a30c2b274b.gif)
 
 ## Introduction
 
-This project is modified and built based on [Beyondmimic](https://github.com/HybridRobotics/whole_body_tracking). The original project, proposed by author qiayuanl, is a versatile humanoid robot control framework. It can provide highly dynamic motion tracking and state-of-the-art motion quality in real-world deployment, along with controllable test-time control through a guidance diffusion-based controller.
+This project is built on top of [BeyondMimic](https://github.com/HybridRobotics/whole_body_tracking),
+a versatile humanoid motion-control framework by qiayuanl et al. that provides highly dynamic motion
+tracking with state-of-the-art motion quality for real-world deployment.
 
-This repo includes motion tracking training, provides assets for HighTorque Robotics robots, and optimizes configuration parameters specifically for HighTorque Robotics robots. **You can train sim-to-real motion using the datasets in the provided motion folder without adjusting any parameters**.
+This repo covers motion-tracking training, ships assets for HighTorque / Bit-Bots `pi_plus` robots,
+and tunes the configuration for them. You can train sim-to-real motions from the datasets in
+`source/motion` without changing any parameters.
 
 ## Installation
 
-Install Isaac Sim v5.0.0, Isaac Lab v2.2.0, and rsl_rl 2.3.1 following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html). We recommend using Conda for installation as it simplifies calling Python scripts from the terminal (Note: Isaac Sim v4.5 and Isaac Lab v2.1.0 environments are also compatible).
+This project is managed with [Pixi](https://pixi.sh), which pins every dependency (CUDA, PyTorch,
+Isaac Sim, Isaac Lab, rsl_rl, …) in `pixi.toml` / `pixi.lock` so the environment is reproducible.
+You do **not** need Conda.
 
-- Clone this repository separately from the Isaac Lab installation directory (i.e., outside the `IsaacLab` directory):
+### Prerequisites
+
+1. **Install Pixi** (if you don't have it):
+   ```bash
+   curl -fsSL https://pixi.sh/install.sh | bash
+   ```
+2. **Clone Isaac Lab as a sibling directory.** This repo references Isaac Lab via editable paths
+   (`../IsaacLab/source/...`), so the two repos must sit next to each other:
+   ```text
+   <parent>/
+   ├── IsaacLab/      # github.com/isaac-sim/IsaacLab @ v2.2.0
+   └── Mini-Pi-Plus_BeyondMimic/   # this repo
+   ```
+   ```bash
+   git clone https://github.com/bit-bots/BeyondMimic.git Mini-Pi-Plus_BeyondMimic
+   git clone -b v2.2.0 https://github.com/isaac-sim/IsaacLab.git
+   ```
+
+### Set up the environment
+
+From the repo root:
 
 ```bash
-git clone https://github.com/HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic
+cd Mini-Pi-Plus_BeyondMimic
+pixi install          # resolves + installs the default environment (Isaac Sim, Isaac Lab, torch, …)
 ```
 
-- Install the project using the Conda virtual environment where Isaac Lab is installed. Navigate to the project directory and execute:
+This pulls Isaac Sim 5.0.0, Isaac Lab 2.2.0 and rsl_rl 2.3.1 automatically — no manual Isaac Sim
+download required. The local `whole_body_tracking` package is installed editable as part of the env.
+
+### Activate the environment
+
+To activate the workspace, run the following in the terminal you want to use:
 
 ```bash
-python -m pip install -e source/whole_body_tracking
+pixi shell            # default environment
+pixi shell -e 5090    # Blackwell GPUs (RTX 50xx)
+pixi shell -e gmr     # GMR retargeting environment
 ```
+
+Once the shell is active you can run the commands below **without** the `pixi run` prefix
+(just `python scripts/...`). Alternatively, run a single command inside the workspace without
+activating the shell by prefixing it with `pixi run`:
+
+```bash
+pixi run python scripts/rsl_rl/train.py ...
+pixi run -e 5090 python scripts/rsl_rl/train.py ...
+```
+
+To list the predefined task shortcuts, run `pixi task list`.
+
+The examples in this README use the `pixi run` prefix; drop it if you are already inside `pixi shell`.
+
+### Environments
+
+The workspace defines three Pixi environments. Pick the one that matches your task / GPU
+(select it via `pixi shell -e <env>` or `pixi run -e <env> ...`):
+
+| Environment | Flag        | Purpose |
+|-------------|-------------|---------|
+| `default`   | *(none)*    | Training / play / sim2sim. PyTorch on **CUDA 12.6** — works on RTX 40xx and older. |
+| `5090`      | `-e 5090`   | Same as `default` but PyTorch on **CUDA 12.8** for Blackwell GPUs (RTX 50xx, `sm_120`). Use this if you see `no kernel image available` / `sm_120 is not compatible`. |
+| `gmr`       | `-e gmr`    | Isolated Python 3.10 env for GMR motion retargeting only (see below). |
 
 ## Motion Tracking
 
 ### Obtain Data & GMR Retargeting Data
-Use the GMR project for dataset retargeting. Original project address: https://github.com/YanjieZe/GMR
 
-```bash
-# Create a Conda environment. For avoiding environment conflicts, retargeting is performed in an independent virtual environment
-conda deactivate
-conda create -n gmr python=3.10 -y
-conda activate gmr
+Use the GMR project for dataset retargeting (original project: https://github.com/YanjieZe/GMR;
+a copy is vendored in `GMR/`). Retargeting runs in the dedicated `gmr` environment.
 
-pip install -e GMR
-conda install -c conda-forge libstdcxx-ng -y
-```
+> If you use a GMR checkout from the original link instead of the vendored `GMR/`,
+> set `numpy==1.24.4` in its `setup.py` before installing.
 
-**Note: If you are not using the GMR provided in this project but downloaded the content from the original link, modify `numpy==1.24.4` in setup.py before installation.**
-
-**Note: To facilitate your use of HighTorque Robotics robots, we provide CSV-format retargeted data files and converted NPZ-format file templates in `source/motion`. If you need to retarget other files, you can follow the steps below.**
+> To make HighTorque robots easy to use, CSV-format retargeted data and converted NPZ templates
+> are provided in `source/motion`. If you need to retarget other files, follow the steps below.
 
 ### Motion Preprocessing & Registry Setup
 
-For easy data inspection:
-
 ```bash
-# Retargeting
-python scripts/bvh_to_robot.py --bvh_file MotionData/lafan1/{xxx}.bvh --robot pi_football --save_path RetargetData/lafan1/csv/pi_plus/{xxx}.csv --rate_limit
+# Retargeting (gmr env)
+pixi run -e gmr python scripts/bvh_to_robot.py --bvh_file MotionData/lafan1/{xxx}.bvh --robot pi_football --save_path RetargetData/lafan1/csv/pi_plus/{xxx}.csv --rate_limit
 
 # Trimming
-python scripts/csv_cut_pi_plus.py --input_csv RetargetData/lafan1/csv/pi_plus/pi_plus_dance1_subject2.csv --output_csv RetargetData/lafan1/csv/pi_plus/{xxx}.csv --start_frame {number} --end_frame {number} --remove_frame_column --z_offset 0.00 --decimal_places 6
+pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/lafan1/csv/pi_plus/pi_plus_dance1_subject2.csv --output_csv RetargetData/lafan1/csv/pi_plus/{xxx}.csv --start_frame {number} --end_frame {number} --remove_frame_column --z_offset 0.00 --decimal_places 6
 
-# NPZ format conversion
-conda activate {your_env_isaaclab}
-
-python scripts/csv_to_npz.py --robot pi_plus --input_file source/motion/hightorque/pi_plus/csv/xxx.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
-# Add --headless if you don't want to load the graphical interface
+# NPZ format conversion (add --headless to skip the graphical interface)
+pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file source/motion/hightorque/pi_plus/csv/xxx.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
 
 # Data playback
-python scripts/replay_npz.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz 
+pixi run python scripts/replay_npz.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
 ```
 
 ### Model Training
 
+> **Keep the task variant consistent.** The `-Wo-v0` task drops two observation terms
+> (`motion_anchor_pos_b` + `base_lin_vel`), so its policy takes a **109-dim** observation input,
+> whereas the full `Tracking-Flat-PI-Plus-v0` task uses **115**. A checkpoint must be played,
+> exported and sim-to-sim evaluated with the **same** task it was trained with — mixing them up
+> produces a tensor-shape mismatch (e.g. `[N, 115]` vs `[N, 109]`).
+
 Train the policy with the following command:
 
 ```bash
-python scripts/rsl_rl/train.py --task=Tracking-Flat-PI-Plus-Wo-v0 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --headless --log_project_name pi_plus_beyondmimic
+pixi run python scripts/rsl_rl/train.py --task=Tracking-Flat-PI-Plus-Wo-v0 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --headless --log_project_name pi_plus_beyondmimic
 # Remove --logger wandb if you don't want to use wandb
 # Resume training with --resume {load_run_name}
+# On a Blackwell GPU (RTX 50xx): pixi run -e 5090 python scripts/rsl_rl/train.py ...
+
+# Other available arguments:
+#   --save_interval=10
+#   --experiment_name={experiment_name}
+#   --log_dir_path={log_dir_path}
+# If --experiment_name and --run_name are given, logs are saved to:
+#   logs/rsl_rl/{experiment_name}/{%Y-%m-%d_%H-%M-%S}_{run_name}
+# If --log_dir_path is given, logs are saved there instead.
 ```
 
 ### Model Export
 
 Play the trained policy with the following command:
+
 ```bash
-python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
+pixi run python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
 ```
+
 ![if](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/e7faf89fbdbf87cf909bbf81ceeb1a7f.gif)
 
 ### Model Evaluation
 
-Validate the policy in Mujoco with the following command:
+Validate the policy in MuJoCo with the following command:
 
 ```bash
-python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --xml_path source/whole_body_tracking/whole_body_tracking/assets/hightorque/pi_plus/mjcf/pi_20dof.xml --policy_path {logs_path_to}/exported/{model_xxx}.onnx --save_json --loop
+pixi run python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --xml_path source/whole_body_tracking/whole_body_tracking/assets/hightorque/pi_plus/mjcf/pi_20dof.xml --policy_path {logs_path_to}/exported/{model_xxx}.onnx --save_json --loop
 # Use --loop to play the policy repeatedly
 ```
+
 ![f](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/de78f3ab232911f9a93e936cb5463164.gif)
 
 ## Code Structure
@@ -107,177 +169,26 @@ python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque
 The following is an overview of the project's code structure:
 
 - **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/mdp`**
-  This directory contains atomic functions for defining BeyondMimic's MDP. Below is a breakdown of these functions:
-    - **`commands.py`**
-      Command library for calculating relevant variables based on reference motion, current robot state, and errors.
-      Calculations include pose and velocity error computation, initial state randomization, and adaptive sampling.
-
-    - **`rewards.py`**
-      Implements DeepMimic reward functions and smoothing terms.
-
-    - **`events.py`**
-      Implements domain randomization terms.
-
-    - **`observations.py`**
-      Implements observation terms for motion tracking and data collection.
-
-    - **`terminations.py`**
-      Implements early termination and timeouts.
-
+  This directory contains atomic functions for defining BeyondMimic's MDP:
+    - **`commands.py`** — command library for computing variables from reference motion, current robot state and errors (pose/velocity error computation, initial-state randomization, adaptive sampling).
+    - **`rewards.py`** — DeepMimic reward functions and smoothing terms.
+    - **`events.py`** — domain-randomization terms.
+    - **`observations.py`** — observation terms for motion tracking and data collection.
+    - **`terminations.py`** — early termination and timeouts.
 - **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/tracking_env_cfg.py`**
-  Contains environment (MDP) hyperparameter configurations for tracking tasks.
-
-- **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/g1/agents/rsl_rl_ppo_cfg.py`**
-  Contains PPO hyperparameters for tracking tasks.
-
+  Environment (MDP) hyperparameter configurations for tracking tasks.
+- **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/*/agents/rsl_rl_ppo_cfg.py`**
+  PPO hyperparameters for tracking tasks.
 - **`source/whole_body_tracking/whole_body_tracking/robots`**
-  Contains robot-specific settings, including skeleton parameters, joint stiffness/damping calculations, and action scaling computations.
-
+  Robot-specific settings (skeleton parameters, joint stiffness/damping, action scaling).
 - **`scripts`**
-  Includes utility scripts for preprocessing motion data, training policies, and evaluating trained policies.
+  Utility scripts for preprocessing motion data, training policies, and evaluating trained policies.
 
-This structure is designed to ensure modularity and ease of navigation for developers extending the project.
+## Acknowledgements
 
-#### Original Project Repository
-[whole_body_tracking](https://github.com/HybridRobotics/whole_body_tracking)
+This repository builds on the following upstream projects:
 
+- [BeyondMimic / whole_body_tracking](https://github.com/HybridRobotics/whole_body_tracking) by qiayuanl et al. (HybridRobotics) — the original motion-tracking framework.
+- [HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic](https://github.com/HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic) — pi_plus assets and configuration this work is based on.
 
-
-
-# Mini Pi Plus based on BeyondMimic （中文翻译）
-
-## 介绍
-
-此项目是基于 [Beyondmimic](https://github.com/HybridRobotics/whole_body_tracking) 进行修改建立的。原项目是由作者qiayuanl提出的一个多功能的人形机器人控制框架，它能够在实际部署中提供高度动态的运动跟踪和最先进的运动质量，并通过基于引导扩散的控制器提供可控的测试时间控制。
-
-此 repo 涵盖了运动追踪训练，提供了高擎机电机器人的asset，并针对高擎机电机器人进行了配置参数的调优。**您能够
-在所提供的motion文件夹下的数据集中训练可模拟到现实的运动，而无需调整任何参数**。
-
-## 安装
-
-按照[安装指南](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html) 安装 Isaac Sim v5.0.0 、 Isaac Lab v2.2.0 和 rsl_rl 2.3.1。我们建议使用 conda 安装，因为它可以简化从终端调用 Python 脚本的操作（备注:Isaac Sim v4.5,Isaac Lab v2.1.0环境也可以）。
-
-- 将此代码库与 Isaac Lab 安装目录分开克隆（即，克隆到`IsaacLab`目录之外）：
-
-```bash
-git clone https://github.com/HighTorque-Robotics/Mini-Pi-Plus_BeyondMimic
-```
-
-- 使用安装了 Isaac Lab 的 Conda 虚拟环境安装本项目，进入项目目录后，执行
-
-```bash
-python -m pip install -e source/whole_body_tracking
-```
-
-## 动作跟踪
-
-### 获取数据，GMR重定向数据
-使用GMR项目进行数据集的重定向，原项目地址: https://github.com/YanjieZe/GMR
-```
-# create conda env 为避免环境冲突等问题，重定向在一个独立的虚拟环境中进行
-conda deactivate
-conda create -n gmr python=3.10 -y
-conda activate gmr
-
-pip install -e GMR
-conda install -c conda-forge libstdcxx-ng -y
-```
-
-
-**注：如果没有使用本项目提供的GMR而是是下载的原链接内容，注意安装前修改setup.py 中 numpy==1.24.4。**
-
-**注：为了便于您使用高擎机电的机器人，我们在`source/motion`中提供了csv版本的重定向数据文件和转换好的npz格式文件模板供你使用，若需要重定向其他文件可以自行按照下方步骤执行**
-
-### Motion Preprocessing & Registry Setup
-
-为了便于检查数据内容，
-
-```bash
-# 重定向
-python scripts/bvh_to_robot.py --bvh_file MotionData/lafan1/{xxx}.bvh --robot pi_football --save_path RetargetData/lafan1/csv/pi_plus/{xxx}.csv --rate_limit
-
-# 裁剪
-python scripts/csv_cut_pi_plus.py --input_csv RetargetData/lafan1/csv/pi_plus/pi_plus_dance1_subject2.csv --output_csv RetargetData/lafan1/csv/pi_plus/{xxx}.csv --start_frame {number} --end_frame {number} --remove_frame_column --z_offset 0.00 --decimal_places 6
-
-# npz格式转换
-conda activate {your_env_isaaclab}
-
-python scripts/csv_to_npz.py --robot pi_plus --input_file source/motion/hightorque/pi_plus/csv/xxx.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
-#若不想加载图形化界面则添加参数 --headless
-
-# 数据播放
-python scripts/replay_npz.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz 
-```
-
-### 模型训练
-
-通过以下命令训练策略：
-
-```bash
-python scripts/rsl_rl/train.py --task=Tracking-Flat-PI-Plus-Wo-v0 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --headless --log_project_name pi_plus_beyondmimic
-#若不想使用wandb，可以去掉 --logger wandb
-#继续训练 --resume {load_run_name}
-
-# 其他可用参数：
---save_interval=10 
---experiment_name={experiment_name}
---log_dir_path={log_dir_path}
-如果提供了--experiment_name和--run_name, log保存路径会是：logs/rsl_rl/{agent_cfg.experiment_name}/{"%Y-%m-%d_%H-%M-%S"}_{run_name}
-如果提供了--log_dir_path就会保存在log_dir_path下
-```
-### 模型导出
-
-通过以下命令play训练好的策略：
-```bash
-python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
-```
-![if](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/e7faf89fbdbf87cf909bbf81ceeb1a7f.gif)
-
-### 模型评估
-
-通过以下命令在mujoco中验证策略：
-
-```bash
-python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --xml_path source/whole_body_tracking/whole_body_tracking/assets/hightorque/pi_plus/mjcf/pi_20dof.xml --policy_path {logs_path_to}/exported/{model_xxx}.onnx --save_json --loop
-#使用--loop可以循环播放策略
-```
-![f](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/de78f3ab232911f9a93e936cb5463164.gif)
-## 代码结构
-
-以下是此项目的代码结构概述：
-
-- **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/mdp`**
-  此目录包含用于定义 BeyondMimic 的 MDP 的原子函数。以下是这些函数的细分：
-    - **`commands.py`**
-      命令库用于根据参考运动、当前机器人状态和误差计算相关变量。
-      计算包括位姿和速度误差计算、初始状态随机化和自适应采样。
-
-    - **`rewards.py`**
-      实现 DeepMimic 奖励函数和平滑项。
-
-    - **`events.py`**
-      实现域随机化项。
-
-    - **`observations.py`**
-      实现运动跟踪和数据收集的观测项。
-
-    - **`terminations.py`**
-      实现提前终止和超时。
-
-- **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/tracking_env_cfg.py`**
-  包含跟踪任务的环境（MDP）超参数配置。
-
-- **`source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/g1/agents/rsl_rl_ppo_cfg.py`**
-  包含跟踪任务的 PPO 超参数。
-
-- **`source/whole_body_tracking/whole_body_tracking/robots`**
-  包含机器人特定设置，包括骨架参数、关节刚度/阻尼计算和动作比例计算。
-
-- **`scripts`**
-  包括用于预处理运动数据、训练策略和评估训练策略的实用脚本。
-
-该结构旨在确保开发人员扩展项目的模块化和易于寻找。
-
-
-## 原项目地址
-[whole_body_tracking](https://github.com/HybridRobotics/whole_body_tracking)
+Licensed under MIT; see `LICENCE` for the original copyright notice.
