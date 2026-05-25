@@ -55,12 +55,6 @@
     <axis xyz="0 0 0" />
     <dynamics damping="0.02" friction="0.0"/>
   </joint>
-  <link name="imu_frame_uncalibrated"/>
-  <joint name="imu_frame_joint" type="fixed">
-    <origin xyz="0 0 0.1" rpy="0 0 0" />
-    <parent link="torso_link" />
-    <child link="imu_frame_uncalibrated" />
-  </joint>
   <link name="r_shoulder_pitch_link">
     <inertial>
       <origin xyz="-0.0023165 -0.01720478 0.00020825" rpy="0 0 0" />
@@ -395,41 +389,6 @@
     <parent link="head_yaw_link" />
     <child link="head_pitch_link" />
   </joint>
-  <link name="camera_link">
-    <inertial>
-      <origin xyz="0.00963743 0.00075253 0.00058537" rpy="0 0 0" />
-      <mass value="0.0584" />
-      <inertia ixx="7.259e-05" ixy="9.8e-07" ixz="0.0" iyy="5.53e-06" iyz="6e-08" izz="7.249e-05" />
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="meshes/camera_link.STL" />
-      </geometry>
-      <material name="">
-        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
-      </material>
-    </visual>
-  </link>
-  <joint name="camera_joint" type="fixed">
-    <origin xyz="0.048925 0.0053519 0.058472" rpy="0 0 0" />
-    <parent link="head_pitch_link" />
-    <child link="camera_link" />
-    <axis xyz="0 0 0" />
-    <dynamics damping="0.02" friction="0.0"/>
-  </joint>
-  <link name="camera_optical_frame_uncalibrated" /> <!-- left camera -->
-  <joint name="camera_joint_uncalibrated" type="fixed">
-    <origin xyz="0.03 -0.039 0.0" rpy="-1.57 0 -1.57" />
-    <parent link="camera_link" />
-    <child link="camera_optical_frame_uncalibrated" />
-  </joint>
-  <link name="camera_optical_frame_right_uncalibrated" /> <!-- right camera -->
-  <joint name="camera_joint_right_uncalibrated" type="fixed">
-    <origin xyz="0.03 0.024 0.0" rpy="-1.57 0 -1.57" />
-    <parent link="camera_link" />
-    <child link="camera_optical_frame_right_uncalibrated" />
-  </joint>
   <link name="r_hip_pitch_link">
     <inertial>
       <origin xyz="7.92e-05 -0.03190261 9.097e-05" rpy="0 0 0" />
@@ -636,12 +595,6 @@
     <limit lower="-0.78" upper="0.78" effort="20" velocity="5.45" />
     <dynamics damping="0.02" friction="0.0"/>
   </joint>
-    <joint name="r_sole_joint" type="fixed">
-    <origin xyz="-0.051 0 -0.05" rpy="0 0 0" />
-    <parent link="r_ankle_roll_link" />
-    <child link="r_sole" />
-  </joint>
-  <link name="r_sole"></link>
   <link name="l_hip_pitch_link">
     <inertial>
       <origin xyz="7.921e-05 0.03190246 -0.0001562" rpy="0 0 0" />
@@ -848,10 +801,4 @@
     <limit lower="-0.78" upper="0.78" effort="20" velocity="5.45" />
     <dynamics damping="0.02" friction="0.0"/>
   </joint>
-  <joint name="l_sole_joint" type="fixed">
-    <origin xyz="-0.051 0 -0.05" rpy="0 0 0" />
-    <parent link="l_ankle_roll_link" />
-    <child link="l_sole" />
-  </joint>
-  <link name="l_sole"></link>
 </robot>

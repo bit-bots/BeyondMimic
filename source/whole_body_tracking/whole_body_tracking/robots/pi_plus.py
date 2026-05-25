@@ -20,6 +20,7 @@ DAMPING_5047 = 1.1
 PI_PLUS_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
         fix_base=False,
+        merge_fixed_joints=False,  # keep head_*/wrist_* as separate bodies for per-link contact penalties
         replace_cylinders_with_capsules=True,
         asset_path=f"{ASSET_DIR}/hightorque/pi_plus_bitbots/pi_plus_22dof.urdf",
         activate_contact_sensors=True,

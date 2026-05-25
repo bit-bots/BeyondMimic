@@ -1,3 +1,4 @@
+
 from isaaclab.utils import configclass
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
@@ -55,12 +56,16 @@ class PIPLUSFlatEnvCfg(TrackingEnvCfg):
             "l_elbow_link",      # bitbots: wrist_link merged into elbow (fixed joint)
             "r_elbow_link",
         ]
+        # Penalize ground contact on everything EXCEPT the legs (hip/thigh/calf/ankle)
+        # and the forearms/hands (wrist). => torso, head, shoulders and upper arms are
+        # penalized; the whole legs incl. feet and the wrists are allowed to touch.
+        # (elbow_link has no collider -> no-op; the lower-arm collider sits on the
+        # now-allowed wrist_link.)
         self.rewards.undesired_contacts.params["sensor_cfg"] = SceneEntityCfg(
             "contact_forces",
-            body_names=[
-                r"^(?!l_ankle_roll_link$)(?!r_ankle_roll_link$)(?!l_elbow_link$)(?!r_elbow_link$).+$"
-            ],
+            body_names=[r"^(?!.*(?:hip|thigh|calf|ankle|wrist)).*$"],
         )
+        self.rewards.undesired_contacts.weight = -0.4
         # 如需演示模式，请使用 Tracking-Flat-PI-Plus-Play-v0
         
         # 修复base_com事件配置，使用base_link而不是torso_link
