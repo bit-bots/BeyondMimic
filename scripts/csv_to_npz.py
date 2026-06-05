@@ -179,13 +179,25 @@ ROBOT_CONFIGS = {
             "r_upper_arm_joint",
             "r_elbow_joint",
         ],
-        # Compensate for bitbots URDF shoulder joint-frame rpy (90° offset vs GMR convention)
-        "joint_offsets": {
-            "l_shoulder_pitch_joint": -math.pi / 2,
-            "l_shoulder_roll_joint":  -math.pi / 2,
-            "r_shoulder_pitch_joint": -math.pi / 2,
-            "r_shoulder_roll_joint":  +math.pi / 2,
-        },
+        # Joints whose rotation axis is inverted in the bitbots URDF (pi_plus_22dof.urdf)
+        # relative to the GMR retargeting XML (pi_22dof_0826.xml). Derived from axis-sign
+        # comparison; applied before joint_offsets.
+        "joint_inversions": [
+            "l_thigh_joint",
+            "l_calf_joint",
+            "r_hip_pitch_joint",
+            "r_thigh_joint",
+            "r_ankle_pitch_joint",
+            "l_upper_arm_joint",
+            "r_shoulder_pitch_joint",
+            "r_upper_arm_joint",
+            "r_elbow_joint",
+        ],
+        # No additive offsets: the shoulder joint-frame rpy in the URDF and the
+        # ref="±1.5708" in the GMR XML are equivalent representations of the same
+        # rest rotation and cancel out exactly (verified by FK comparison). The
+        # axis-sign differences are fully handled by joint_inversions above.
+        "joint_offsets": {},
     },
     # "pi_plus_head": {
     #     "cfg": PI_PLUS80_WAIST_shell_CFG,
@@ -297,7 +309,16 @@ class MotionLoader:
     def _load_motion(self):
         """Loads the motion from the csv file."""
         has_header = self.robot_config["has_header"]
-        
+
+        # Auto-detect a leading "frame" index column (written by bvh_to_robot.py).
+        # The loader expects columns [root pos(3), root rot(4), dofs...]; a frame
+        # column shifts everything by one. Detected from the header and dropped below.
+        has_frame_col = False
+        if has_header:
+            with open(self.motion_file, "r") as _f:
+                first_col = _f.readline().split(",")[0].strip().lower()
+            has_frame_col = first_col == "frame"
+
         if self.frame_range is None:
             skip_rows = 1 if has_header else 0
             motion = torch.from_numpy(np.loadtxt(self.motion_file, delimiter=",", skiprows=skip_rows))
@@ -316,6 +337,13 @@ class MotionLoader:
             )
         
         motion = motion.to(torch.float32).to(self.device)
+
+        # Drop the leading frame-index column so downstream slicing matches the
+        # [root pos, root rot, dofs] layout regardless of whether it was present.
+        if has_frame_col:
+            motion = motion[:, 1:]
+            print("[INFO]: Dropped leading 'frame' column from CSV")
+
         self.motion_base_poss_input = motion[:, :3]
         self.motion_base_rots_input = motion[:, 3:7]
         self.motion_base_rots_input = self.motion_base_rots_input[:, [3, 0, 1, 2]]  # convert to wxyz
@@ -326,6 +354,17 @@ class MotionLoader:
             self.motion_dof_poss_input = motion[:, dof_slice[0]:dof_slice[1]]
         else:
             self.motion_dof_poss_input = motion[:, 7:]
+
+        # Flip sign of joints whose rotation axis is inverted in the target URDF
+        # relative to the GMR retargeting XML. Applied BEFORE offsets so the
+        # joint_offsets below keep defining the home pose (sign-independent at q=0).
+        joint_inversions = self.robot_config.get("joint_inversions", None)
+        if joint_inversions:
+            joint_names = self.robot_config["joint_names"]
+            for jname in joint_inversions:
+                idx = joint_names.index(jname)
+                self.motion_dof_poss_input[:, idx] *= -1.0
+            print(f"Applied joint inversions: {joint_inversions}")
 
         # Apply per-joint constant offsets from robot_config (compensates URDF joint-frame rpy vs GMR convention)
         joint_offsets = self.robot_config.get("joint_offsets", None)
