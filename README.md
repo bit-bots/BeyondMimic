@@ -186,8 +186,17 @@ Passing `--video` implicitly enables cameras, so `--enable_cameras` is not neede
 pixi run python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --headless --video --video_length 200 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
 ```
 
-The mp4 is written to `<checkpoint_dir>/videos/play/`. `--video_length` is the number of
-steps to record; the play loop exits once that many steps are reached.
+The mp4 is written to `<checkpoint_dir>/videos/play/` and is named after the checkpoint
+(e.g. `model_xxx-step-0.mp4`), so different checkpoints don't overwrite each other.
+`--video_length` is the number of steps to record; the play loop exits once that many
+steps are reached.
+
+By default the reference-trajectory coordinate frames are **not** drawn, so they don't
+overlay the motion. Add `--viz_trajectory` to show them:
+
+```bash
+pixi run python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --viz_trajectory --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
+```
 
 ![if](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/e7faf89fbdbf87cf909bbf81ceeb1a7f.gif)
 

@@ -20,6 +20,12 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--motion_file", type=str, default=None, help="Path to the motion file.")
+parser.add_argument(
+    "--viz_trajectory",
+    action="store_true",
+    default=False,
+    help="Visualize the reference-trajectory coordinate frames in the Isaac rendering.",
+)
 # parser.add_argument("--motion_file", type=str, required=True, help="Path to the motion file.")
 # parser.add_argument("--resume_path", type=str, required=True, help="Path to the trained model checkpoint.")
 
@@ -112,6 +118,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     if args_cli.motion_file is not None:
         env_cfg.commands.motion.motion_file = args_cli.motion_file
+
+    # toggle the reference-trajectory coordinate-frame visualization
+    env_cfg.commands.motion.debug_vis = args_cli.viz_trajectory
 
     print(f"[INFO] Loading experiment from directory: {log_root_path}")
     resume_path = None
