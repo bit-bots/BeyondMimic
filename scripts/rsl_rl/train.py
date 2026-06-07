@@ -110,8 +110,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
         log_root_path = os.path.abspath(log_root_path)
         print(f"[INFO] Logging experiment in directory: {log_root_path}")
-        # specify directory for logging runs: {time-stamp}_{run_name}
-        log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # specify directory for logging runs: {motion_name}_{date}_{time}_{run_name}
+        motion_name = os.path.splitext(os.path.basename(env_cfg.commands.motion.motion_file))[0]
+        log_dir = f"{motion_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
         if agent_cfg.run_name:
             log_dir += f"_{agent_cfg.run_name}"
         log_dir = os.path.join(log_root_path, log_dir)
