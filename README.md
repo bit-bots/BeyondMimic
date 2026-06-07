@@ -177,6 +177,18 @@ Play the trained policy with the following command:
 pixi run python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
 ```
 
+#### Headless video rendering
+
+To render a video of the policy on a headless host (no display), add `--headless --video`.
+Passing `--video` implicitly enables cameras, so `--enable_cameras` is not needed:
+
+```bash
+pixi run python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --checkpoint {logs_path_to}/model_xxx.pt --num_envs=1 --headless --video --video_length 200 --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
+```
+
+The mp4 is written to `<checkpoint_dir>/videos/play/`. `--video_length` is the number of
+steps to record; the play loop exits once that many steps are reached.
+
 ![if](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/e7faf89fbdbf87cf909bbf81ceeb1a7f.gif)
 
 ### Model Evaluation

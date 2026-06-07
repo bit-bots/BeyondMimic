@@ -138,11 +138,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # wrap for video recording
     if args_cli.video:
+        # name the video after the checkpoint so different checkpoints don't overwrite each other
+        checkpoint_name = os.path.splitext(os.path.basename(resume_path))[0]
         video_kwargs = {
             "video_folder": os.path.join(log_dir, "videos", "play"),
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
+            "name_prefix": checkpoint_name,
         }
         print("[INFO] Recording videos during training.")
         print_dict(video_kwargs, nesting=4)

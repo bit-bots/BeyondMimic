@@ -36,11 +36,11 @@ class PIPLUSFlatEnvCfg(TrackingEnvCfg):
             "r_elbow_link",
         ]
         
-        # 相机设置：自由视角，不跟随机器人
-        self.viewer.eye = (3.0, 3.0, 2.0)  # 相机位置
-        self.viewer.lookat = (0.0, 0.0, 1.0)  # 看向位置
-        self.viewer.origin_type = "world"  # 世界坐标系，不跟随机器人
-        self.viewer.asset_name = None  # 不绑定到特定资产
+        # 相机设置：跟随机器人，使其在画面中央
+        self.viewer.eye = (3.0, 3.0, 2.0)  # 相机位置（相对机器人的偏移）
+        self.viewer.lookat = (0.0, 0.0, 0.3)  # 看向位置（相对机器人的偏移）
+        self.viewer.origin_type = "asset_root"  # 跟随机器人根节点
+        self.viewer.asset_name = "robot"  # 绑定到机器人资产
         
         # 关闭调试可视化显示
         # self.commands.motion.debug_vis = False  # 关闭motion命令的调试可视化
