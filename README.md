@@ -106,17 +106,43 @@ a copy is vendored in `GMR/`). Retargeting runs in the dedicated `gmr` environme
 
 ```bash
 # Retargeting (gmr env)
-pixi run -e gmr python scripts/bvh_to_robot.py --bvh_file MotionData/lafan1/{xxx}.bvh --robot pi_football --save_path RetargetData/lafan1/csv/pi_plus/{xxx}.csv --rate_limit
+pixi run -e gmr python scripts/bvh_to_robot.py --bvh_file GMR/MotionData/lafan1/{xxx}.bvh --robot pi_football --save_path GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --rate_limit
+
+# Retargeting on a headless machine (no display / no X11).
+# bvh_to_robot.py always opens the MuJoCo GUI viewer, which fails on a headless
+# host with: GLFWError "X11: The DISPLAY environment variable is missing".
+# Use the headless variant instead — same CSV output (column reorder, wxyz->xyzw,
+# --keep_wrist), but no viewer/rendering. --save_path is required; --rate_limit is
+# accepted but ignored.
+pixi run -e gmr python scripts/bvh_to_robot_headless.py --bvh_file GMR/MotionData/lafan1/{xxx}.bvh --robot pi_football --save_path GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv
 
 # Trimming
-pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/lafan1/csv/pi_plus/pi_plus_dance1_subject2.csv --output_csv RetargetData/lafan1/csv/pi_plus/{xxx}.csv --start_frame {number} --end_frame {number} --remove_frame_column --z_offset 0.00 --decimal_places 6
+pixi run python scripts/csv_cut_pi_plus.py --input_csv GMR/RetargetData/lafan1/csv/pi_plus/pi_plus_dance1_subject2.csv --output_csv GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --start_frame {number} --end_frame {number} --remove_frame_column --z_offset 0.00 --decimal_places 6
 
 # NPZ format conversion (add --headless to skip the graphical interface)
-pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file source/motion/hightorque/pi_plus/csv/xxx.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
+# --input_file is the trimmed CSV from the previous step.
+pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
 
-# Data playback
+# Data playback (interactive viewer; needs a display)
 pixi run python scripts/replay_npz.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz
+
+# Data playback -> render to mp4 (works headless)
+pixi run python scripts/replay_npz.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --headless --video
 ```
+
+`replay_npz.py` can render the motion to an mp4 instead of (or in addition to) the live
+viewer. This is the only way to inspect a motion on a headless host (no display), since the
+interactive viewer needs an X display. Video flags:
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--video` | off | Enable recording (implicitly sets `--enable_cameras`). |
+| `--video_path PATH` | `<motion_file>.mp4` | Output mp4 path. If omitted, written next to the NPZ with the same name. |
+| `--video_length N` | `0` | Number of frames to record. `0` records exactly one full motion loop. |
+| `--headless` | off | Run without opening a Kit window. Required on a headless host. |
+
+The output is a fixed 1280x720 H.264 mp4 (via `imageio` + ffmpeg) at `1 / sim_dt` fps (50 fps). On a
+headless host the file cannot be displayed in place — copy it off the machine (e.g. `scp`) to view it.
 
 ### Model Training
 
