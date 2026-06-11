@@ -43,9 +43,15 @@ PI_PLUS_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.351),
         joint_pos={
-            ".*_hip_pitch_joint": -0.25,
-            ".*_calf_joint": 0.65,
-            ".*_ankle_pitch_joint": -0.4,
+            # Pitch joints have opposite signs L/R because the bitbots URDF uses
+            # mirrored rotation axes (see joint_inversions in csv_to_npz.py). The
+            # right hip/ankle pitch and the left calf are the inverted ones.
+            "l_hip_pitch_joint": -0.25,
+            "r_hip_pitch_joint": 0.25,
+            "l_calf_joint": -0.65,
+            "r_calf_joint": 0.65,
+            "l_ankle_pitch_joint": -0.4,
+            "r_ankle_pitch_joint": 0.4,
             ".*_elbow_joint": 0.0,
             "l_shoulder_roll_joint": 0.0,
             "l_shoulder_pitch_joint": 0.0,
