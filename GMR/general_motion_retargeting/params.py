@@ -45,6 +45,7 @@ IK_CONFIG_DICT = {
         "berkeley_humanoid_lite": IK_CONFIG_ROOT / "smplx_to_bhl.json",
         "booster_k1": IK_CONFIG_ROOT / "smplx_to_k1.json",
         "pnd_adam_lite": IK_CONFIG_ROOT / "smplx_to_adam.json",
+        "pi_football": IK_CONFIG_ROOT / "smplx_to_pi_football.json",
     },
     "bvh":{
         "unitree_g1": IK_CONFIG_ROOT / "bvh_to_g1.json",

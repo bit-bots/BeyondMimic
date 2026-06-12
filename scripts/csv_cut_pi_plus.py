@@ -24,7 +24,13 @@ def cut_motion_csv(input_csv, output_csv, start_frame, end_frame, remove_frame_c
     
     print(f"Original data: {len(df)} frames")
     print(f"Frame range: {df['frame'].min()} to {df['frame'].max()}")
-    
+
+    # Default to the full range when start/end not specified (e.g. only applying z_offset)
+    if start_frame is None:
+        start_frame = int(df['frame'].min())
+    if end_frame is None:
+        end_frame = int(df['frame'].max())
+
     # Validate frame range
     if start_frame < df['frame'].min() or start_frame > df['frame'].max():
         raise ValueError(f"Start frame {start_frame} is out of range [{df['frame'].min()}, {df['frame'].max()}]")
@@ -89,15 +95,15 @@ def main():
     parser.add_argument(
         "--start_frame",
         type=int,
-        required=True,
-        help="Start frame number (inclusive)"
+        default=None,
+        help="Start frame number (inclusive). Default: first frame (no trimming)."
     )
-    
+
     parser.add_argument(
-        "--end_frame", 
+        "--end_frame",
         type=int,
-        required=True,
-        help="End frame number (inclusive)"
+        default=None,
+        help="End frame number (inclusive). Default: last frame (no trimming)."
     )
     
     # Optional: batch processing

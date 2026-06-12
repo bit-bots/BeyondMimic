@@ -1,3 +1,4 @@
+
 import argparse
 import pathlib
 import os
@@ -70,6 +71,13 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
         help="Automatically adjust human motion so the lowest foot is 0.1m above ground.",
+    )
+
+    parser.add_argument(
+        "--keep_wrist",
+        action="store_true",
+        default=False,
+        help="Keep l_wrist and r_wrist joint columns in CSV output. Default behavior is to drop them (bitbots pi_plus has no wrist joints).",
     )
 
     args = parser.parse_args()
@@ -163,19 +171,16 @@ if __name__ == "__main__":
         root_rot = np.array([qpos[3:7][[1,2,3,0]] for qpos in qpos_list])
         dof_pos = np.array([qpos[7:] for qpos in qpos_list])
         
-        # 重排序关节角度：从 左腿→左臂→右腿→右臂 到 左腿→右腿→左臂→右臂
-        # 当前顺序: 0-5(左腿), 6-10(左臂), 11-16(右腿), 17-21(右臂)
-        # 期望顺序: 0-5(左腿), 6-11(右腿), 12-16(左臂), 17-21(右臂)
-        reorder_indices = [
-            # 左腿 (保持原位)
-            0, 1, 2, 3, 4, 5,           # l_hip_pitch → l_ankle_roll
-            # 右腿 (从位置11-16移到6-11) 
-            11, 12, 13, 14, 15, 16,     # r_hip_pitch → r_ankle_roll
-            # 左臂 (从位置6-10移到12-16)
-            6, 7, 8, 9, 10,             # l_shoulder_pitch → l_wrist  
-            # 右臂 (从位置17-21移到17-21)
-            17, 18, 19, 20, 21          # r_shoulder_pitch → r_wrist
-        ]
+        # GMR output order: l_leg(0-5), l_arm(6-10, last=l_wrist), r_leg(11-16), r_arm(17-21, last=r_wrist)
+        # Target CSV order: l_leg → r_leg → l_arm → r_arm
+        l_arm_src = [6, 7, 8, 9, 10] if args.keep_wrist else [6, 7, 8, 9]
+        r_arm_src = [17, 18, 19, 20, 21] if args.keep_wrist else [17, 18, 19, 20]
+        reorder_indices = (
+            [0, 1, 2, 3, 4, 5]
+            + [11, 12, 13, 14, 15, 16]
+            + l_arm_src
+            + r_arm_src
+        )
         dof_pos = dof_pos[:, reorder_indices]
 
         # Check if save as CSV format
@@ -188,17 +193,18 @@ if __name__ == "__main__":
                 header.extend([f'root pos {i}' for i in ['x', 'y','z']])
                 header.extend([f'root rot {i}' for i in ['x','y','z','w']])
                 
-                # pi_plus机器人关节名称 (22个自由度，无腰部和头部关节)
-                joint_names = [
-                    # 左腿
-                    'l_hip_pitch', 'l_hip_roll', 'l_thigh', 'l_calf', 'l_ankle_pitch', 'l_ankle_roll',
-                    # 右腿  
-                    'r_hip_pitch', 'r_hip_roll', 'r_thigh', 'r_calf', 'r_ankle_pitch', 'r_ankle_roll',
-                    # 左臂
-                    'l_shoulder_pitch', 'l_shoulder_roll', 'l_upper_arm', 'l_elbow', 'l_wrist',
-                    # 右臂
-                    'r_shoulder_pitch', 'r_shoulder_roll', 'r_upper_arm', 'r_elbow', 'r_wrist'
-                ]
+                # Joint names matching reorder_indices order (pi_plus has no waist/head joints)
+                l_arm_names = ['l_shoulder_pitch', 'l_shoulder_roll', 'l_upper_arm', 'l_elbow']
+                r_arm_names = ['r_shoulder_pitch', 'r_shoulder_roll', 'r_upper_arm', 'r_elbow']
+                if args.keep_wrist:
+                    l_arm_names.append('l_wrist')
+                    r_arm_names.append('r_wrist')
+                joint_names = (
+                    ['l_hip_pitch', 'l_hip_roll', 'l_thigh', 'l_calf', 'l_ankle_pitch', 'l_ankle_roll']
+                    + ['r_hip_pitch', 'r_hip_roll', 'r_thigh', 'r_calf', 'r_ankle_pitch', 'r_ankle_roll']
+                    + l_arm_names
+                    + r_arm_names
+                )
                 header.extend(joint_names)
                 writer.writerow(header)
 

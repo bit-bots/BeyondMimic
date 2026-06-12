@@ -19,6 +19,9 @@ logs/
 outputs/
 wandb/
 
+# License-gated body models (SMPL/SMPL-X) — must not be committed/redistributed
+assets/body_models/
+
 # IDE
 .vscode/
 .idea/
