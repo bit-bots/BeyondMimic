@@ -62,7 +62,73 @@ torch       = { version = "==2.7.0",  index = "https://download.pytorch.org/whl/
 torchvision = { version = "==0.22.0", index = "https://download.pytorch.org/whl/cu128" }
 torchaudio  = { version = "==2.7.0",  index = "https://download.pytorch.org/whl/cu128" }
 
+# --- Env for GVHMR (video -> SMPL-X motion extraction, Python 3.10, CUDA 12.1) ---
+# Standalone like `gmr` (no-default-feature). CUDA 12.1 stack exactly per GVHMR
+# requirements.txt; the pytorch3d wheel is built specifically for torch 2.3.0+cu121.
+# Runs on cu121-capable GPUs (sm_<=90). For the 5090 (sm_120) torch would need cu128
+# and pytorch3d a source rebuild -> separate effort.
+[feature.gvhmr.dependencies]
+python = "3.10.*"
+pip = "*"
+setuptools = ">=68,<80"
+packaging = ">=23,<25"   # lightning 2.3.0 needs packaging<25; conda otherwise pins 26.x
+libstdcxx-ng = ">=12"
+libgcc-ng = ">=12"
+gxx = "12.*"          # build toolchain for chumpy / cython_bbox / lapx
+cmake = "*"
+git = "*"
+ffmpeg = "*"          # GVHMR reads/writes video (ffmpeg-python calls the binary)
+cython = "*"          # build dep for cython_bbox (no-build-isolation)
+
+[feature.gvhmr.pypi-dependencies]
+# GVHMR itself (editable, like GMR)
+gvhmr = { path = "GVHMR", editable = true }
+
+# PyTorch (CUDA 12.1) — exactly as in requirements.txt
+torch       = { version = "==2.3.0",  index = "https://download.pytorch.org/whl/cu121" }
+torchvision = { version = "==0.18.0", index = "https://download.pytorch.org/whl/cu121" }
+timm = "==0.9.12"
+
+# Lightning + Hydra
+lightning = "==2.3.0"
+hydra-core = "==1.3"
+hydra-zen = "*"
+hydra_colorlog = "*"
+rich = "*"
+
+# Common utilities
+numpy = "==1.23.5"
+matplotlib = "*"
+tensorboardX = "*"
+opencv-python = "*"
+ffmpeg-python = "*"
+scikit-image = "*"
+termcolor = "*"
+einops = "*"
+imageio = "==2.34.1"
+av = "==13.0.0"
+joblib = "*"
+
+# 3D vision (pytorch3d wheel matched to py310/cu121/pyt230)
+pytorch3d = { url = "https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu121_pyt230/pytorch3d-0.7.6-cp310-cp310-linux_x86_64.whl" }
+trimesh = "*"
+# sdist-only packages that fail to build during resolution (chumpy needs pip at
+# build, cython_bbox needs numpy/cython). Prebuilt once via the gvhmr env's pip
+# into wheels/ and referenced directly so uv installs the wheel without building.
+chumpy = { path = "wheels/chumpy-0.70-py3-none-any.whl" }
+smplx = "*"
+wis3d = "*"
+# GVHMR's SimpleVO uses the old pycolmap API (estimate_calibrated_two_view_geometry,
+# cam2_from_cam1). pycolmap 4.x changed it (returns None) -> pin to the release-era 0.6.x.
+pycolmap = "==0.6.1"
+
+# 2D pose
+ultralytics = "==8.2.42"
+cython_bbox = { path = "wheels/cython_bbox-0.1.5-cp310-cp310-linux_x86_64.whl" }
+lapx = "*"
+
 [environments]
 default = { solve-group = "main" }
 gmr = { features = ["gmr"], no-default-feature = true }
 "5090" = { features = ["cu128"] }
+gvhmr = { features = ["gvhmr"], no-default-feature = true }
