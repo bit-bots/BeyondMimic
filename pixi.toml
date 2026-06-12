@@ -127,6 +127,13 @@ ultralytics = "==8.2.42"
 cython_bbox = { path = "wheels/cython_bbox-0.1.5-cp310-cp310-linux_x86_64.whl" }
 lapx = "*"
 
+[feature.gvhmr.tasks]
+# GVHMR demo runs with cwd=GVHMR (its Hydra configs/checkpoints use paths relative to GVHMR/).
+# Start from the repo root; pixi handles the directory. Trailing args are forwarded:
+#   pixi run -e gvhmr gvhmr-demo --video docs/example_video/tennis.mp4
+# Note: the --video path is relative to GVHMR/.
+gvhmr-demo = { cmd = "python tools/demo/demo.py", cwd = "GVHMR" }
+
 [environments]
 default = { solve-group = "main" }
 gmr = { features = ["gmr"], no-default-feature = true }

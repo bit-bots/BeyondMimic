@@ -63,6 +63,7 @@ To activate the workspace, run the following in the terminal you want to use:
 pixi shell            # default environment
 pixi shell -e 5090    # Blackwell GPUs (RTX 50xx)
 pixi shell -e gmr     # GMR retargeting environment
+pixi shell -e gvhmr   # GVHMR video-to-motion environment
 ```
 
 Once the shell is active you can run the commands below **without** the `pixi run` prefix
@@ -80,7 +81,7 @@ The examples in this README use the `pixi run` prefix; drop it if you are alread
 
 ### Environments
 
-The workspace defines three Pixi environments. Pick the one that matches your task / GPU
+The workspace defines four Pixi environments. Pick the one that matches your task / GPU
 (select it via `pixi shell -e <env>` or `pixi run -e <env> ...`):
 
 | Environment | Flag        | Purpose |
@@ -88,6 +89,7 @@ The workspace defines three Pixi environments. Pick the one that matches your ta
 | `default`   | *(none)*    | Training / play / sim2sim. PyTorch on **CUDA 12.6** — works on RTX 40xx and older. |
 | `5090`      | `-e 5090`   | Same as `default` but PyTorch on **CUDA 12.8** for Blackwell GPUs (RTX 50xx, `sm_120`). Use this if you see `no kernel image available` / `sm_120 is not compatible`. |
 | `gmr`       | `-e gmr`    | Isolated Python 3.10 env for GMR motion retargeting only (see below). |
+| `gvhmr`     | `-e gvhmr`  | Isolated Python 3.10 env (**CUDA 12.1**) for GVHMR video-to-motion extraction (see below). Needs a cu121-capable GPU (`sm_<=90`, e.g. RTX 40xx). |
 
 ## Motion Tracking
 
@@ -143,6 +145,64 @@ interactive viewer needs an X display. Video flags:
 
 The output is a fixed 1280x720 H.264 mp4 (via `imageio` + ffmpeg) at `1 / sim_dt` fps (50 fps). On a
 headless host the file cannot be displayed in place — copy it off the machine (e.g. `scp`) to view it.
+
+### Motion from Video (GVHMR)
+
+Instead of retargeting an existing mocap dataset (BVH/lafan1), you can extract motion **from a single
+monocular RGB video** with [GVHMR](https://github.com/zju3dv/GVHMR) (vendored in `GVHMR/`) and feed it
+into the same pi_plus pipeline. Video pose estimation runs in the dedicated `gvhmr` environment; the
+later retarget/trim/convert steps reuse the `gmr` and `default` envs.
+
+**One-time setup** (model files are license-gated and *not* managed by Pixi):
+
+1. Download the pretrained checkpoints (GVHMR, HMR2, ViTPose, YOLO) into `GVHMR/inputs/checkpoints/`
+   and the SMPL-X / SMPL body models into `GVHMR/inputs/checkpoints/body_models/{smplx,smpl}/`
+   — see `GVHMR/docs/INSTALL.md` (register at smpl-x.is.tue.mpg.de and smpl.is.tue.mpg.de).
+2. The retarget step also needs the SMPL-X model at `assets/body_models/smplx/SMPLX_NEUTRAL.npz`.
+   Symlink it to the GVHMR copy (avoids a 100 MB duplicate; `assets/body_models/` is gitignored and
+   the license-gated files must not be committed):
+   ```bash
+   mkdir -p assets/body_models/smplx
+   ln -s "$(pwd)/GVHMR/inputs/checkpoints/body_models/smplx/SMPLX_NEUTRAL.npz" assets/body_models/smplx/SMPLX_NEUTRAL.npz
+   ```
+
+**Pipeline** (example name `tennis`):
+
+```bash
+# 1) Video -> GVHMR (SMPL-X .pt)  [gvhmr env]
+#    The gvhmr-demo task runs with cwd=GVHMR; the --video path is relative to GVHMR/.
+pixi run -e gvhmr gvhmr-demo --video docs/example_video/tennis.mp4
+#   -> GVHMR/outputs/demo/tennis/hmr4d_results.pt
+
+# 2) Bridge: GVHMR .pt -> AMASS-style SMPL-X .npz  [gmr env]
+#    GVHMR's world frame is y-up, AMASS/SMPL-X is z-up -> rotate +90 about X.
+pixi run -e gmr python scripts/gvhmr_to_smplx.py GVHMR/outputs/demo/tennis/hmr4d_results.pt --output RetargetData/gvhmr/smplx/tennis.npz --rot_axis x --rot_deg 90
+
+# 3) Retarget: SMPL-X .npz -> pi_plus CSV (20 DOF)  [gmr env]
+pixi run -e gmr python scripts/smplx_to_pi_plus.py --smplx_file RetargetData/gvhmr/smplx/tennis.npz --save_path RetargetData/gvhmr/csv/pi_plus/tennis.csv
+
+# 4) Trim / ground: z-offset drops the ~5 cm float (optional frame range)  [default env]
+pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/gvhmr/csv/pi_plus/tennis.csv --output_csv RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv --z_offset -0.05
+#   optional: --start_frame {n} --end_frame {m}
+
+# 5) NPZ conversion -> training-ready motion  [default env]
+pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/tennis
+```
+
+From step 5 on, the `.npz` is identical to a lafan1-derived motion — replay / train / evaluate it
+with the same commands as above.
+
+> **Storage layout.** GVHMR artifacts mirror the lafan1 convention: the (robot-agnostic) SMPL-X bridge
+> output goes to `RetargetData/gvhmr/smplx/`, the pi_plus CSVs (raw + `_cut`) to
+> `RetargetData/gvhmr/csv/pi_plus/`, and the final training NPZ to `source/motion/hightorque/pi_plus/npz/`.
+
+**Notes:**
+- The y-up→z-up rotation (`--rot_axis x --rot_deg 90`) is GVHMR-specific. Verify the figure stands
+  upright by running step 3 without `--save_path` (opens the viewer); if it lies down / is upside down,
+  adjust `--rot_deg`.
+- For a moving/handheld camera GVHMR uses its default SimpleVO. `--static_cam` (tripod) and
+  `--use_dpvo` (needs compiling the optional DPVO submodule) are alternatives — see `tools/demo/demo.py`.
+- `csv_to_npz.py` applies the pi_plus URDF axis inversions automatically — no manual sign flips needed.
 
 ### Model Training
 
