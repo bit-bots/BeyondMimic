@@ -26,6 +26,18 @@ parser.add_argument(
     default=False,
     help="Visualize the reference-trajectory coordinate frames in the Isaac rendering.",
 )
+parser.add_argument(
+    "--eval",
+    action="store_true",
+    default=False,
+    help=(
+        "Evaluation mode: replay the reference motion deterministically from frame 0 to the end "
+        "and loop cleanly, instead of the training-time random/adaptive start. Disables observation "
+        "noise, random pushes and all terminations so the clip always plays through in full, "
+        "regardless of how well the policy tracks it. "
+        "Defaults to a single environment unless --num_envs is given."
+    ),
+)
 # parser.add_argument("--motion_file", type=str, required=True, help="Path to the motion file.")
 # parser.add_argument("--resume_path", type=str, required=True, help="Path to the trained model checkpoint.")
 
@@ -75,7 +87,11 @@ from whole_body_tracking.utils.exporter import attach_onnx_metadata, export_moti
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlOnPolicyRunnerCfg):
     """Play with RSL-RL agent."""
     agent_cfg: RslRlOnPolicyRunnerCfg = cli_args.parse_rsl_rl_cfg(args_cli.task, args_cli)
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    if args_cli.num_envs is not None:
+        env_cfg.scene.num_envs = args_cli.num_envs
+    elif args_cli.eval:
+        # single clean robot for evaluation unless the user explicitly asks for more
+        env_cfg.scene.num_envs = 1
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
@@ -121,6 +137,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # toggle the reference-trajectory coordinate-frame visualization
     env_cfg.commands.motion.debug_vis = args_cli.viz_trajectory
+
+    # --eval: deterministic full-clip playback. Start every (re)start at frame 0 and loop cleanly
+    # at the end (handled inside MotionCommand), with domain randomization off. All terminations
+    # are removed so the reference motion always runs to the end and loops, regardless of whether
+    # the agent manages to track it (a fall no longer resets the clip mid-way).
+    if args_cli.eval:
+        env_cfg.commands.motion.eval_mode = True
+        env_cfg.episode_length_s = 1.0e6  # effectively disables the time-out termination
+        env_cfg.observations.policy.enable_corruption = False  # no observation noise
+        env_cfg.events.push_robot = None  # no random pushes
+        # run the clip through regardless of tracking quality: drop fall/deviation terminations
+        env_cfg.terminations.anchor_pos = None
+        env_cfg.terminations.anchor_ori = None
+        env_cfg.terminations.ee_body_pos = None
 
     print(f"[INFO] Loading experiment from directory: {log_root_path}")
     resume_path = None

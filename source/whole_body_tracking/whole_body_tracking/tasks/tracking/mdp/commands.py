@@ -253,6 +253,10 @@ class MotionCommand(CommandTerm):
         self.metrics["projected_gravity_error"][:] = self.projected_gravity_error_w
 
     def _adaptive_sampling(self, env_ids: Sequence[int]):
+        if self.cfg.eval_mode:
+            # deterministic eval: always (re)start the clip from frame 0
+            self.time_steps[env_ids] = 0
+            return
         episode_failed = self._env.termination_manager.terminated[env_ids]
         if torch.any(episode_failed):
             current_bin_index = torch.clamp(
@@ -294,6 +298,25 @@ class MotionCommand(CommandTerm):
         if len(env_ids) == 0:
             return
         self._adaptive_sampling(env_ids)
+
+        if self.cfg.eval_mode:
+            # Place the robot exactly on the reference frame-0 state (no randomization) so each
+            # (re)start / loop begins cleanly from the motion start. time_steps is already 0 here
+            # (set in _adaptive_sampling), so the body_*/joint_* properties index frame 0.
+            root_state = torch.cat(
+                [
+                    self.body_pos_w[env_ids, 0],
+                    self.body_quat_w[env_ids, 0],
+                    self.body_lin_vel_w[env_ids, 0],
+                    self.body_ang_vel_w[env_ids, 0],
+                ],
+                dim=-1,
+            )
+            self.robot.write_root_state_to_sim(root_state, env_ids=env_ids)
+            self.robot.write_joint_state_to_sim(
+                self.joint_pos[env_ids], self.joint_vel[env_ids], env_ids=env_ids
+            )
+            return
 
         root_pos = self.body_pos_w[:, 0].clone()
         root_ori = self.body_quat_w[:, 0].clone()
@@ -561,6 +584,11 @@ class MotionCommandCfg(CommandTermCfg):
     velocity_range: dict[str, tuple[float, float]] = {}
 
     joint_position_range: tuple[float, float] = (-0.52, 0.52)
+
+    # Evaluation playback: when True, every (re)start of the clip begins at frame 0 with the
+    # robot placed exactly on the reference (no adaptive/random start, no start randomization).
+    # Used by play.py --eval to replay the motion from start to end and loop cleanly.
+    eval_mode: bool = False
 
     adaptive_kernel_size: int = 3
     adaptive_lambda: float = 0.8
