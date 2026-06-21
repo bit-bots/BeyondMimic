@@ -80,7 +80,18 @@ if __name__ == "__main__":
         help="Keep l_wrist and r_wrist joint columns in CSV output. Default behavior is to drop them (bitbots pi_plus has no wrist joints).",
     )
 
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Run without the interactive MuJoCo viewer (no GLFW/display needed). Use on remote/headless servers to only retarget and save.",
+    )
+
     args = parser.parse_args()
+
+    if args.headless and args.record_video:
+        print("[yellow]--record_video requires the viewer; ignoring it in --headless mode.[/yellow]")
+        args.record_video = False
 
 
     SMPLX_FOLDER = HERE / ".." / "assets" / "body_models"
@@ -103,11 +114,13 @@ if __name__ == "__main__":
         tgt_robot=args.robot,
     )
     
-    robot_motion_viewer = RobotMotionViewer(robot_type=args.robot,
-                                            motion_fps=aligned_fps,
-                                            transparent_robot=0,
-                                            record_video=args.record_video,
-                                            video_path=f"videos/{args.robot}_{args.smplx_file.split('/')[-1].split('.')[0]}.mp4",)
+    robot_motion_viewer = None
+    if not args.headless:
+        robot_motion_viewer = RobotMotionViewer(robot_type=args.robot,
+                                                motion_fps=aligned_fps,
+                                                transparent_robot=0,
+                                                record_video=args.record_video,
+                                                video_path=f"videos/{args.robot}_{args.smplx_file.split('/')[-1].split('.')[0]}.mp4",)
     
 
     curr_frame = 0
@@ -152,16 +165,17 @@ if __name__ == "__main__":
         qpos = retarget.retarget(smplx_data, offset_to_ground=args.offset_to_ground)
 
         # visualize
-        robot_motion_viewer.step(
-            root_pos=qpos[:3],
-            root_rot=qpos[3:7],
-            dof_pos=qpos[7:],
-            human_motion_data=retarget.scaled_human_data,
-            # human_motion_data=smplx_data,
-            human_pos_offset=np.array([0.0, 0.0, -0.0]),  
-            show_human_body_name=False,
-            rate_limit=args.rate_limit,
-        )
+        if robot_motion_viewer is not None:
+            robot_motion_viewer.step(
+                root_pos=qpos[:3],
+                root_rot=qpos[3:7],
+                dof_pos=qpos[7:],
+                human_motion_data=retarget.scaled_human_data,
+                # human_motion_data=smplx_data,
+                human_pos_offset=np.array([0.0, 0.0, -0.0]),
+                show_human_body_name=False,
+                rate_limit=args.rate_limit,
+            )
         if args.save_path is not None:
             qpos_list.append(qpos)
             
@@ -236,4 +250,5 @@ if __name__ == "__main__":
             
       
     
-    robot_motion_viewer.close()
+    if robot_motion_viewer is not None:
+        robot_motion_viewer.close()

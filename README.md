@@ -179,7 +179,10 @@ pixi run -e gvhmr gvhmr-demo --video docs/example_video/tennis.mp4
 pixi run -e gmr python scripts/gvhmr_to_smplx.py GVHMR/outputs/demo/tennis/hmr4d_results.pt --output RetargetData/gvhmr/smplx/tennis.npz --rot_axis x --rot_deg 90
 
 # 3) Retarget: SMPL-X .npz -> pi_plus CSV (20 DOF)  [gmr env]
-pixi run -e gmr python scripts/smplx_to_pi_plus.py --smplx_file RetargetData/gvhmr/smplx/tennis.npz --save_path RetargetData/gvhmr/csv/pi_plus/tennis.csv
+#    smplx_to_pi_plus.py opens the MuJoCo GUI viewer by default, which fails on a
+#    headless host with: "Could not initialize GLFW". Add --headless to skip the
+#    viewer entirely (no display / no X11 / no xvfb needed) — same CSV output.
+pixi run -e gmr python scripts/smplx_to_pi_plus.py --smplx_file RetargetData/gvhmr/smplx/tennis.npz --save_path RetargetData/gvhmr/csv/pi_plus/tennis.csv --headless
 
 # 4) Trim / ground: z-offset drops the ~5 cm float (optional frame range)  [default env]
 pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/gvhmr/csv/pi_plus/tennis.csv --output_csv RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv --z_offset -0.05
@@ -198,8 +201,9 @@ with the same commands as above.
 
 **Notes:**
 - The y-up→z-up rotation (`--rot_axis x --rot_deg 90`) is GVHMR-specific. Verify the figure stands
-  upright by running step 3 without `--save_path` (opens the viewer); if it lies down / is upside down,
-  adjust `--rot_deg`.
+  upright by running step 3 without `--save_path` and without `--headless` (opens the viewer); if it
+  lies down / is upside down, adjust `--rot_deg`. This visual check needs a display — on a headless
+  host either retarget with `--headless` and inspect the result after step 5 via `replay_npz.py --headless --video`.
 - For a moving/handheld camera GVHMR uses its default SimpleVO. `--static_cam` (tripod) and
   `--use_dpvo` (needs compiling the optional DPVO submodule) are alternatives — see `tools/demo/demo.py`.
 - `csv_to_npz.py` applies the pi_plus URDF axis inversions automatically — no manual sign flips needed.
