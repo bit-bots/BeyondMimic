@@ -282,7 +282,7 @@ pixi run python scripts/rsl_rl/play.py --task=Tracking-Flat-PI-Plus-Wo-v0 --chec
 Validate the policy in MuJoCo with the following command:
 
 ```bash
-pixi run python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --xml_path source/whole_body_tracking/whole_body_tracking/assets/hightorque/pi_plus/mjcf/pi_20dof.xml --policy_path {logs_path_to}/exported/{model_xxx}.onnx --save_json --loop
+pixi run python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --xml_path source/whole_body_tracking/whole_body_tracking/assets/hightorque/pi_plus_bitbots/mjcf/pi_plus_22dof.xml --policy_path {logs_path_to}/exported/{model_xxx}.onnx --save_json --loop
 # Use --loop to play the policy repeatedly
 ```
 

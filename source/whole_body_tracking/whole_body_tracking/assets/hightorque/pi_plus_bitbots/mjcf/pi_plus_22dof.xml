@@ -2,15 +2,15 @@
   <compiler angle="radian" meshdir="../meshes/"/>
   <default>
     <default class="pi_joint_arm">
-      <joint damping="0.66" actuatorfrcrange="-10 10"/>
+      <joint damping="0.66" actuatorfrcrange="-10 10" armature="0.01317" frictionloss="0.2"/>
       <!-- damping = 10Nm / (155rpm - 10 rpm (in rad/s)) -->
     </default>
     <default class="pi_joint_leg">
-      <joint damping="2.94" actuatorfrcrange="-20 20"/>
+      <joint damping="1.5" actuatorfrcrange="-20 20" armature="0.01316"/>
       <!-- damping = 20Nm / (75rpm - 10 rpm (in rad/s)) -->
     </default>
     <default class="pi_joint_head">
-      <joint damping="0.48" actuatorfrcrange="-2.5 2.5" />
+      <joint damping="0.48" actuatorfrcrange="-2.5 2.5" armature="0.00249" frictionloss="0.1"/>
       <!-- damping = 2.5Nm / (60rpm - 10 rpm (in rad/s))-->
     </default>
     <default class="collision">
@@ -72,12 +72,12 @@
         <geom name="torso_link_collision0" class="collision" pos="0 0 0.09" type="box" size="0.0775 0.0775 0.0775" />
         <body name="r_shoulder_pitch_link" pos="0 -0.1084 0.117">
           <inertial pos="-0.0023165 -0.0172048 0.00020825" quat="-0.034283 0.706989 0.0142854 0.706249" mass="0.139352" diaginertia="0.000145208 0.000122162 7.54598e-05"/>
-          <joint name="r_shoulder_pitch_joint" class="pi_joint_arm" pos="0 0 0" axis="0 -1 0" range="-2.6 2.6"/>
+          <joint name="r_shoulder_pitch_joint" class="pi_joint_arm" pos="0 0 0" axis="0 -1 0" ref="1.5708" range="-2.6 2.6"/>
           <geom type="mesh" class="visual" rgba="0.752941 0.752941 0.752941 1" mesh="r_shoulder_pitch_link"/>
           <!-- <geom type="mesh" class="collision" rgba="0.752941 0.752941 0.752941 1" mesh="r_shoulder_pitch_link_simplify"/> -->
           <body name="r_shoulder_roll_link" pos="0 -0.038 0">
             <inertial pos="-0.00164862 -0.00020989 -0.024888" quat="0.692267 -0.0208066 -0.015904 0.721166" mass="0.55615" diaginertia="0.000521636 0.000513996 0.000152408"/>
-            <joint name="r_shoulder_roll_joint" class="pi_joint_arm" pos="0 0 0" axis="1 0 0" range="-1.65 1.46"/>
+            <joint name="r_shoulder_roll_joint" class="pi_joint_arm" pos="0 0 0" axis="1 0 0" ref="1.5708" range="-1.65 1.46"/>
             <geom type="mesh" class="visual" rgba="0.752941 0.752941 0.752941 1" mesh="r_shoulder_roll_link"/>
             <!-- <geom type="mesh" class="collision" rgba="0.752941 0.752941 0.752941 1" mesh="r_shoulder_roll_link"/> -->
             <body name="r_upper_arm_link" pos="0 0 -0.0724">
@@ -102,12 +102,12 @@
         </body>
         <body name="l_shoulder_pitch_link" pos="0 0.1084 0.11698">
           <inertial pos="-0.00215543 0.0172048 0.00022511" quat="0.0355111 0.707216 -0.0147967 0.70595" mass="0.139352" diaginertia="0.00014525 0.000122217 7.54432e-05"/>
-          <joint name="l_shoulder_pitch_joint" class="pi_joint_arm" pos="0 0 0" axis="0 1 0" range="-2.6 2.6"/>
+          <joint name="l_shoulder_pitch_joint" class="pi_joint_arm" pos="0 0 0" axis="0 1 0" ref="-1.5708" range="-2.6 2.6"/>
           <geom type="mesh" class="visual" rgba="0.752941 0.752941 0.752941 1" mesh="l_shoulder_pitch_link"/>
           <!-- <geom type="mesh" class="collision" rgba="0.752941 0.752941 0.752941 1" mesh="l_shoulder_pitch_link_simplify"/> -->
           <body name="l_shoulder_roll_link" pos="0 0.038 0">
             <inertial pos="-0.00140359 0.00022205 -0.024888" quat="0.658223 -0.023097 -0.0218074 0.752153" mass="0.55615" diaginertia="0.000522159 0.000514351 0.00015235"/>
-            <joint name="l_shoulder_roll_joint" class="pi_joint_arm" pos="0 0 0" axis="1 0 0" range="-1.46 1.65"/>
+            <joint name="l_shoulder_roll_joint" class="pi_joint_arm" pos="0 0 0" axis="1 0 0" ref="-1.5708" range="-1.46 1.65"/>
             <geom type="mesh" class="visual" rgba="0.752941 0.752941 0.752941 1" mesh="l_shoulder_roll_link"/>
             <!-- <geom type="mesh" class="collision" rgba="0.752941 0.752941 0.752941 1" mesh="l_shoulder_roll_link"/> -->
             <body name="l_upper_arm_link" pos="0 0 -0.0724">

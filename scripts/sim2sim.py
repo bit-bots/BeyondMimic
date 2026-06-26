@@ -72,42 +72,46 @@ ROBOT_CONFIGS = {
         }
     },
     "pi_plus": {
-        "num_actions": 22,
-        "num_obs": 119,
+        "num_actions": 20,
+        "num_obs": 115,  # FULL variant (Tracking-Flat-PI-Plus-v0): incl. motion_anchor_pos_b + base_lin_vel
         "reference_body": "base_link",
         "default_xml": None,  # Must be provided
+        # bitbots pi_plus: 20 DoF (no wrists -> fixed, no head -> fixed).
+        # Order MUST match the MJCF qpos order of
+        # assets/hightorque/pi_plus_bitbots/mjcf/pi_plus_22dof.xml: R-arm, L-arm, R-leg, L-leg.
+        # sim2sim indexes d.qpos[7:]/d.ctrl via this list, so the order is load-bearing.
         "joint_names": [
-            "l_hip_pitch_joint",
-            "l_hip_roll_joint",
-            "l_thigh_joint",
-            "l_calf_joint",
-            "l_ankle_pitch_joint",
-            "l_ankle_roll_joint",
+            "r_shoulder_pitch_joint",
+            "r_shoulder_roll_joint",
+            "r_upper_arm_joint",
+            "r_elbow_joint",
             "l_shoulder_pitch_joint",
             "l_shoulder_roll_joint",
             "l_upper_arm_joint",
             "l_elbow_joint",
-            "l_wrist_joint",
             "r_hip_pitch_joint",
             "r_hip_roll_joint",
             "r_thigh_joint",
             "r_calf_joint",
             "r_ankle_pitch_joint",
             "r_ankle_roll_joint",
-            "r_shoulder_pitch_joint",
-            "r_shoulder_roll_joint",
-            "r_upper_arm_joint",
-            "r_elbow_joint",
-            "r_wrist_joint",
+            "l_hip_pitch_joint",
+            "l_hip_roll_joint",
+            "l_thigh_joint",
+            "l_calf_joint",
+            "l_ankle_pitch_joint",
+            "l_ankle_roll_joint",
         ],
         "motion_body_index": 0,
         "observation_structure": {
-            "command": 44,
-            "motion_ref_ori_b": 6,
+            "command": 40,
+            "motion_anchor_pos_b": 3,
+            "motion_anchor_ori_b": 6,
+            "base_lin_vel": 3,
             "base_ang_vel": 3,
-            "joint_pos": 22,
-            "joint_vel": 22,
-            "actions": 22
+            "joint_pos": 20,
+            "joint_vel": 20,
+            "actions": 20
         }
     }
 }
@@ -241,19 +245,33 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
     """Calculates torques from position commands"""
     return (target_q - q) * kp + (target_dq - dq) * kd
 
-def create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, qpos_seq, qvel_seq, action_buffer, joint_pos_array_seq, num_actions):
-    """Create observation for HI and PI Plus robots."""
+def create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, qpos_seq, qvel_seq, action_buffer, joint_pos_array_seq, num_actions, motion_anchor_pos_b=None, base_lin_vel=None):
+    """Create observation for HI and PI Plus robots.
+
+    Layout follows the policy's `observation_names`:
+        command, [motion_anchor_pos_b], motion_anchor_ori_b, [base_lin_vel],
+        base_ang_vel, joint_pos, joint_vel, actions
+    The bracketed terms are only written when provided. They belong to the FULL
+    obs variant (e.g. Tracking-Flat-PI-Plus-v0, 115). Pass None for the deploy/Wo
+    variant (109) and for the `hi` config, preserving the original layout.
+    """
     cmd_size = len(motioninput)
     obs[offset:offset + cmd_size] = motioninput
     offset += cmd_size
+    if motion_anchor_pos_b is not None:
+        obs[offset:offset + 3] = motion_anchor_pos_b
+        offset += 3
     obs[offset:offset + 6] = motion_ref_ori_b
     offset += 6
+    if base_lin_vel is not None:
+        obs[offset:offset + 3] = base_lin_vel
+        offset += 3
     obs[offset:offset + 3] = omega
     offset += 3
     obs[offset:offset + num_actions] = qpos_seq - joint_pos_array_seq
     offset += num_actions
     obs[offset:offset + num_actions] = qvel_seq
-    offset += num_actions   
+    offset += num_actions
     obs[offset:offset + num_actions] = action_buffer
     return obs
 
@@ -361,9 +379,24 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
     motionposcurrent = motionpos[frame_idx(timestep), motion_body_idx, :]
     motionquatcurrent = motionquat[frame_idx(timestep), motion_body_idx, :]
     
-    target_dof_pos = joint_pos_array.copy()
+    # Spawn the robot at the motion's first frame instead of the default standing
+    # pose. Without this the robot always starts at z=0.385 with identity orientation,
+    # so motions that do not start standing (e.g. supine get-up) are impossible to track.
+    # The base pose comes from the anchor body (base_link); the motion joint_pos is stored
+    # in the policy (joint_seq) order, so it is remapped to the MJCF qpos order.
+    start_idx = frame_idx(0)
     if robot_type == "hi":
         d.qpos[2] = 0.68
+        target_dof_pos = joint_pos_array.copy()
+    else:
+        d.qpos[0:3] = motionpos[start_idx, motion_body_idx, :]
+        d.qpos[3:7] = motionquat[start_idx, motion_body_idx, :]
+        start_joint_seq = motioninputpos[start_idx]
+        d.qpos[7:7 + num_actions] = np.array(
+            [start_joint_seq[joint_seq.index(j)] for j in joint_xml]
+        )
+        mujoco.mj_forward(m, d)
+        target_dof_pos = d.qpos[7:7 + num_actions].copy()
     
     # Set reference body
     body_name = config["reference_body"]
@@ -387,8 +420,9 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
                 # Update motion data
                 idx = frame_idx(timestep)
                 motioninput = np.concatenate((motioninputpos[idx, :], motioninputvel[idx, :]), axis=0)
+                motionposcurrent = motionpos[idx, motion_body_idx, :]
                 motionquatcurrent = motionquat[idx, motion_body_idx, :]
-                
+
                 # Create observations based on robot type
                 offset = 0
                 if robot_type in ["hi", "pi_plus"]:
@@ -403,13 +437,23 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
                         q12 = q10
                     mat = matrix_from_quat(torch.from_numpy(q12))
                     motion_ref_ori_b = mat[..., :2].reshape(6)
-                    
+
                     qpos_xml = d.qpos[7:7 + num_actions]
                     qpos_seq = np.array([qpos_xml[joint_xml.index(joint)] for joint in joint_seq])
                     qvel_xml = d.qvel[6:6 + num_actions]
                     qvel_seq = np.array([qvel_xml[joint_xml.index(joint)] for joint in joint_seq])
-                    
-                    obs = create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, qpos_seq, qvel_seq, action_buffer, joint_pos_array_seq, num_actions)
+
+                    # Privileged terms for the FULL obs variant. Config-driven so the
+                    # deploy/Wo layout and the `hi` robot keep their original 6-group obs.
+                    obs_struct = config["observation_structure"]
+                    motion_anchor_pos_b = None
+                    if "motion_anchor_pos_b" in obs_struct:
+                        # motion anchor pos expressed in the robot anchor (base_link) frame:
+                        # R_robot^T (motion_anchor_pos_w - robot_anchor_pos_w)
+                        motion_anchor_pos_b = quat_rotate_inverse_np(quat, motionposcurrent - d.qpos[:3])
+                    base_lin_vel = v if "base_lin_vel" in obs_struct else None
+
+                    obs = create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, qpos_seq, qvel_seq, action_buffer, joint_pos_array_seq, num_actions, motion_anchor_pos_b=motion_anchor_pos_b, base_lin_vel=base_lin_vel)
                 
                 # Run policy inference
                 obs_tensor = torch.from_numpy(obs).unsqueeze(0)
