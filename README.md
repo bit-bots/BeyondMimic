@@ -121,8 +121,21 @@ pixi run -e gmr python scripts/bvh_to_robot_headless.py --bvh_file GMR/MotionDat
 # Trimming
 pixi run python scripts/csv_cut_pi_plus.py --input_csv GMR/RetargetData/lafan1/csv/pi_plus/pi_plus_dance1_subject2.csv --output_csv GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --start_frame {number} --end_frame {number} --remove_frame_column --z_offset 0.00 --decimal_places 6
 
+# (Optional) walkready bracketing — make the motion start/end in the deploy "walkready" pose,
+# velocity-continuous. Useful for acrobatics (cartwheel, get-up) that must hand off cleanly to the
+# ready/walk controller. The crossfade blends the *continuing* motion (carries its momentum) into a
+# fixed walkready pose instead of hard-cutting, so there is no abrupt stop. Output: <input>_walkready.csv.
+#   --front / --back         which ends to bracket (neither given -> both).
+#   --back-fade-start N      original frame where the motion fades out into walkready; everything
+#                            after (start + back-fade-len) is discarded (e.g. a broken-IK settling tail).
+#   --back-fast-fade-len N   fade --back-fast-joints (default: left arm) faster, to pull a broken IK
+#                            joint out of its pose quickly. --hold-front/--hold-back add static frames.
+# Legs are written so csv_to_npz reproduces walkready_state in sim; arms reuse the motion's frame-0 rest.
+pixi run python scripts/add_walkready.py GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --front --back --back-fade-start {frame} --front-fade-len 24 --back-fade-len 48 --back-fast-fade-len 30 --hold-front 6 --hold-back 30
+#   -> GMR/RetargetData/lafan1/csv/pi_plus/{xxx}_walkready.csv  (feed this as --input_file to csv_to_npz below)
+
 # NPZ format conversion (add --headless to skip the graphical interface)
-# --input_file is the trimmed CSV from the previous step.
+# --input_file is the trimmed CSV from the previous step (or its _walkready variant if you ran that step).
 pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
 
 # Data playback (interactive viewer; needs a display)
