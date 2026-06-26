@@ -185,8 +185,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             frames_written += 1
             if frames_written >= frames_to_record:
                 mp4_writer.close()
-                print(f"[INFO]: Saved video to {video_path} ({frames_written} frames)")
-                break
+                print(f"[INFO]: Saved video to {video_path} ({frames_written} frames)", flush=True)
+                # simulation_app.close() itself can hang on Isaac's camera/render
+                # threads in video mode, so the os._exit() after main() is never
+                # reached. The mp4 is fully flushed above, so exit hard right here.
+                os._exit(0)
 
 
 def main():
@@ -226,3 +229,7 @@ if __name__ == "__main__":
     main()
     # close sim app
     simulation_app.close()
+    # In video mode the renderer/camera threads (--enable_cameras) keep the
+    # process alive even after close(). The mp4 is already flushed in
+    # run_simulator(), so force a clean process exit instead of hanging.
+    os._exit(0)
