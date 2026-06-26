@@ -39,6 +39,23 @@ simulation_duration = 300.0
 simulation_dt = 0.002
 control_decimation = 10
 
+# ---------------------------------------------------------------------------
+# PI Plus PD gains as used in *training* (source of truth: robots/pi_plus.py).
+# Hardcoded here so sim2sim reproduces the training PD controller exactly,
+# independent of whatever the exported ONNX metadata happens to carry.
+#   arms  (shoulder_*/upper_arm/elbow): STIFFNESS_4438=30, DAMPING_4438=0.6
+#   legs+feet (hip_*/thigh/calf/ankle_*): STIFFNESS_5047=80, DAMPING_5047=1.1
+# The matching rotor armature (ARMATURE_4438=0.01317 / ARMATURE_5047=0.01316)
+# lives in the MJCF (pi_plus_22dof.xml) as the per-joint-class `armature`.
+# ---------------------------------------------------------------------------
+PI_PLUS_ARM_KP, PI_PLUS_ARM_KD = 30.0, 0.6
+PI_PLUS_LEG_KP, PI_PLUS_LEG_KD = 80.0, 1.1
+
+
+def _pi_plus_is_arm(joint_name: str) -> bool:
+    """Arm joints get the 4438 gains; everything else (legs + feet) the 5047 gains."""
+    return any(k in joint_name for k in ("shoulder", "upper_arm", "elbow"))
+
 # Robot configurations
 ROBOT_CONFIGS = {
     
@@ -362,7 +379,20 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
     joint_pos_array = np.array([joint_pos_array_seq[joint_seq.index(joint)] for joint in joint_xml])
     stiffness_array = np.array([stiffness_array_seq[joint_seq.index(joint)] for joint in joint_xml])
     damping_array = np.array([damping_array_seq[joint_seq.index(joint)] for joint in joint_xml])
-    
+
+    # PI Plus: force the exact training PD gains (robots/pi_plus.py) instead of the
+    # ONNX-metadata values, in joint_xml (MJCF qpos) order. Keeps sim2sim in lockstep
+    # with the kp/kd/armature the policy was trained on.
+    if robot_type == "pi_plus":
+        print("stiffness_array (onnx)", stiffness_array)
+        print("damping_array   (onnx)", damping_array)
+        stiffness_array = np.array(
+            [PI_PLUS_ARM_KP if _pi_plus_is_arm(j) else PI_PLUS_LEG_KP for j in joint_xml]
+        )
+        damping_array = np.array(
+            [PI_PLUS_ARM_KD if _pi_plus_is_arm(j) else PI_PLUS_LEG_KD for j in joint_xml]
+        )
+
     print("stiffness_array", stiffness_array)
     print("damping_array", damping_array)
     print("action_scale", action_scale)

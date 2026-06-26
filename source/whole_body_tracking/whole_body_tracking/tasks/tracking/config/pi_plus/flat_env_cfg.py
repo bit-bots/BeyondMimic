@@ -65,7 +65,7 @@ class PIPLUSFlatEnvCfg(TrackingEnvCfg):
             "contact_forces",
             body_names=[r"^(?!.*(?:hip|thigh|calf|ankle|wrist)).*$"],
         )
-        self.rewards.undesired_contacts.weight = -0.4
+        self.rewards.undesired_contacts.weight = -2.5
         # 如需演示模式，请使用 Tracking-Flat-PI-Plus-Play-v0
         
         # 修复base_com事件配置，使用base_link而不是torso_link

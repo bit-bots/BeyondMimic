@@ -2,12 +2,10 @@
   <compiler angle="radian" meshdir="../meshes/"/>
   <default>
     <default class="pi_joint_arm">
-      <joint damping="0.66" actuatorfrcrange="-10 10" armature="0.01317" frictionloss="0.2"/>
-      <!-- damping = 10Nm / (155rpm - 10 rpm (in rad/s)) -->
+      <joint damping="0" actuatorfrcrange="-10 10" armature="0.01317" frictionloss="0.2"/>
     </default>
     <default class="pi_joint_leg">
-      <joint damping="1.5" actuatorfrcrange="-20 20" armature="0.01316"/>
-      <!-- damping = 20Nm / (75rpm - 10 rpm (in rad/s)) -->
+      <joint damping="0" actuatorfrcrange="-20 20" armature="0.01316"/>
     </default>
     <default class="pi_joint_head">
       <joint damping="0.48" actuatorfrcrange="-2.5 2.5" armature="0.00249" frictionloss="0.1"/>
