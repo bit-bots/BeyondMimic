@@ -11,8 +11,19 @@ Usage Examples:
 """
 
 import argparse
+import contextlib
 import json
+import os
+import sys
 import time
+
+# Offscreen video recording (--video) renders headlessly and needs a non-GLFW GL
+# backend. MUJOCO_GL is read once, at `import mujoco` below, so it must be selected
+# here BEFORE the import — setting it later (e.g. in main()) is too late and MuJoCo
+# falls back to GLFW, which fails on a headless host (no DISPLAY). Default to EGL
+# (GPU); override with MUJOCO_GL=osmesa for CPU-only / no-GPU remote hosts.
+if "--video" in sys.argv:
+    os.environ.setdefault("MUJOCO_GL", "egl")
 
 import mujoco
 import mujoco.viewer
@@ -276,7 +287,8 @@ def create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, 
     return obs
 
 
-def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path: str, save_json: bool = False, loop: bool = False):
+def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path: str, save_json: bool = False, loop: bool = False,
+                   headless: bool = False, video: bool = False, video_length: int = 0):
     """Run the sim2sim simulation."""
     config = ROBOT_CONFIGS[robot_type]
     print(f"[INFO]: Using robot configuration: {robot_type}")
@@ -305,7 +317,6 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
             "joint_vel": motioninputvel.tolist()
         }
         # Convert npz path to json path: npz/file.npz -> json/file.json
-        import os
         motion_dir = os.path.dirname(motion_file)
         motion_basename = os.path.basename(motion_file)
         
@@ -404,9 +415,53 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
     if body_id == -1:
         raise ValueError(f"Body {body_name} not found in model")
 
-    with mujoco.viewer.launch_passive(m, d) as viewer:
+    # --- optional headless video recording ------------------------------------
+    # Mirrors the convention in play.py / replay_npz.py: the mp4 lands at
+    #   <run_dir>/videos/sim2sim/<model_name>_sim2sim.mp4
+    # where <run_dir> is the training run (parent of the policy's exported/ dir) and
+    # <model_name> is the onnx basename (model_4000.onnx -> model_4000_sim2sim.mp4).
+    record_video = video
+    headless = headless or video  # video is always rendered offscreen / headless
+    renderer = None
+    mp4_writer = None
+    rec_cam = None
+    video_path = None
+    frames_to_record = 0
+    frames_written = 0
+    if record_video:
+        import imageio
+
+        policy_dir = os.path.dirname(os.path.abspath(policy_path))
+        run_dir = os.path.dirname(policy_dir) if os.path.basename(policy_dir) == "exported" else policy_dir
+        video_dir = os.path.join(run_dir, "videos", "sim2sim")
+        os.makedirs(video_dir, exist_ok=True)
+        model_name = os.path.splitext(os.path.basename(policy_path))[0]
+        video_path = os.path.join(video_dir, f"{model_name}_sim2sim.mp4")
+
+        # ensure the model's offscreen framebuffer is large enough for the requested size
+        width, height = 1280, 720
+        m.vis.global_.offwidth = max(width, m.vis.global_.offwidth)
+        m.vis.global_.offheight = max(height, m.vis.global_.offheight)
+        renderer = mujoco.Renderer(m, height=height, width=width)
+        # follow camera tracking the robot base (works for standing and ground-start motions)
+        rec_cam = mujoco.MjvCamera()
+        rec_cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+        rec_cam.trackbodyid = body_id
+        rec_cam.distance = 2.5
+        rec_cam.azimuth = 90.0
+        rec_cam.elevation = -20.0
+
+        fps = int(round(1.0 / (simulation_dt * control_decimation)))  # one frame per control step
+        mp4_writer = imageio.get_writer(video_path, fps=fps)
+        # default (0): record exactly one full motion loop
+        frames_to_record = video_length if video_length > 0 else num_frames
+        print(f"[INFO]: Recording {frames_to_record} frames @ {fps} fps to {video_path}", flush=True)
+
+    # In headless mode there is no interactive viewer; step/render as fast as possible.
+    viewer_cm = contextlib.nullcontext() if headless else mujoco.viewer.launch_passive(m, d)
+    with viewer_cm as viewer:
         start = time.time()
-        while viewer.is_running() and time.time() - start < simulation_duration:
+        while (viewer.is_running() if viewer is not None else True) and time.time() - start < simulation_duration:
             step_start = time.time()
 
             mujoco.mj_step(m, d)
@@ -472,11 +527,25 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
                 if loop or timestep + 1 < num_frames:
                     timestep += 1
 
-            viewer.sync()
+                # one rendered frame per control step (~50 fps) when recording
+                if record_video:
+                    renderer.update_scene(d, camera=rec_cam)
+                    mp4_writer.append_data(renderer.render())
+                    frames_written += 1
+                    if frames_written >= frames_to_record:
+                        break
 
-            time_until_next_step = m.opt.timestep - (time.time() - step_start)
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
+            if viewer is not None:
+                viewer.sync()
+                time_until_next_step = m.opt.timestep - (time.time() - step_start)
+                if time_until_next_step > 0:
+                    time.sleep(time_until_next_step)
+
+    if record_video:
+        mp4_writer.close()
+        print(f"[INFO]: Saved video to {video_path} ({frames_written} frames)", flush=True)
+        # offscreen GL contexts can keep the process alive; the mp4 is flushed, so exit hard.
+        os._exit(0)
 
 
 def main():
@@ -493,9 +562,16 @@ def main():
                         help="Save motion data to JSON file")
     parser.add_argument("--loop", action="store_true",
                         help="Loop motion/policy when reaching the end of sequence")
-    
+    parser.add_argument("--headless", action="store_true",
+                        help="Run without the interactive viewer (no window). Implied by --video.")
+    parser.add_argument("--video", action="store_true",
+                        help="Render the run to an mp4 headlessly, saved to "
+                             "<run_dir>/videos/sim2sim/<model>_sim2sim.mp4. Remote/headless friendly.")
+    parser.add_argument("--video_length", type=int, default=0,
+                        help="Frames (control steps) to record. 0 (default) = one full motion loop.")
+
     args = parser.parse_args()
-    
+
     # All parameters are now required, so no additional validation needed
     
     print(f"[INFO]: Robot: {args.robot}")
@@ -503,7 +579,8 @@ def main():
     print(f"[INFO]: XML path: {args.xml_path}")
     print(f"[INFO]: Policy path: {args.policy_path}")
     
-    run_simulation(args.robot, args.motion_file, args.xml_path, args.policy_path, args.save_json, args.loop)
+    run_simulation(args.robot, args.motion_file, args.xml_path, args.policy_path, args.save_json, args.loop,
+                   headless=args.headless, video=args.video, video_length=args.video_length)
 
 
 if __name__ == "__main__":

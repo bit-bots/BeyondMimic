@@ -283,7 +283,9 @@ Validate the policy in MuJoCo with the following command:
 
 ```bash
 pixi run python scripts/sim2sim.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --xml_path source/whole_body_tracking/whole_body_tracking/assets/hightorque/pi_plus_bitbots/mjcf/pi_plus_22dof.xml --policy_path {logs_path_to}/exported/{model_xxx}.onnx --save_json --loop
-# Use --loop to play the policy repeatedly
+# --loop plays the policy repeatedly.
+# Add --video to render headlessly to an mp4 (works on remote hosts without a display.
+# Add --video_length {frames} to cap the recording (default: one full motion loop).
 ```
 
 ![f](https://github.com/Daily-study-HT/bydmimic_publish/blob/main/gif/de78f3ab232911f9a93e936cb5463164.gif)
