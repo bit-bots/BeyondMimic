@@ -11,9 +11,8 @@ smoothly (no abrupt velocity jump). Output goes to <input>_walkready.csv.
                    everything after (back-fade-start + back-fade-len) is discarded.
                    --back-fast-* fades selected joints faster (e.g. a broken IK arm).
 
-The walkready legs are written so that scripts/csv_to_npz.py (which sign-flips the
-joints in INV) reproduces walkready_state in sim. walkready arms = the input's
-frame-0 arms (the natural rest pose; shoulder rest is at qpos~=-1.5708, NOT 0).
+The walkready pose is written so that scripts/csv_to_npz.py (which sign-flips the
+joints in INV) reproduces the SIM-convention targets in WALKREADY_SIM.
 
 Examples
 --------
@@ -50,12 +49,16 @@ INV = [
     "l_thigh", "l_calf", "r_hip_pitch", "r_thigh", "r_ankle_pitch",
     "l_upper_arm", "r_shoulder_pitch", "r_upper_arm", "r_elbow",
 ]
-# walkready leg targets in SIM convention (== walkready_state, leg joints only).
+# walkready joint targets in SIM convention (radians).
+# make_walkready() sign-flips the INV joints to
+# write CSV convention, and csv_to_npz.py flips them back to exactly these sim values.
 WALKREADY_SIM = {
     "r_hip_pitch": 0.6, "r_hip_roll": 0.0, "r_thigh": 0.0, "r_calf": 1.2,
     "r_ankle_pitch": 0.6, "r_ankle_roll": 0.0,
     "l_hip_pitch": -0.6, "l_hip_roll": 0.0, "l_thigh": 0.0, "l_calf": -1.2,
     "l_ankle_pitch": -0.6, "l_ankle_roll": 0.0,
+    "l_shoulder_pitch": 1.57, "l_shoulder_roll": 1.22, "l_upper_arm": 0.0, "l_elbow": 0.0,
+    "r_shoulder_pitch": -1.57, "r_shoulder_roll": -1.22, "r_upper_arm": 0.0, "r_elbow": 0.0,
 }
 # FK-grounded pelvis height for the bent-knee walkready (calibrated to init_state z=0.351).
 WALKREADY_Z = 0.3173
@@ -139,10 +142,10 @@ def load_csv(path):
 def make_walkready(x, y, yaw, frame0):
     joints = np.zeros(len(CSV_JOINTS))
     for k, j in enumerate(CSV_JOINTS):
-        if j in WALKREADY_SIM:  # leg: sim -> csv (negate the inverted ones)
+        if j in WALKREADY_SIM:  # fixed target: sim -> csv (negate the inverted ones)
             v = WALKREADY_SIM[j]
             joints[k] = -v if j in INV else v
-        else:  # arm: take the input's frame-0 (natural rest) pose as-is
+        else:  # fallback for any joint without a target: keep the input's frame-0 value
             joints[k] = frame0[7 + k]
     return np.concatenate([[x, y, WALKREADY_Z], upright_quat(yaw), joints])
 
