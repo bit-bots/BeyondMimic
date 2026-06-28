@@ -13,6 +13,22 @@ from general_motion_retargeting.utils.smpl import load_smplx_file, get_smplx_dat
 
 from rich import print
 
+# walkready seed for the GMR IK, in GMR/CSV convention (= SIM values from
+# scripts/add_walkready.py WALKREADY_SIM, with the csv_to_npz INV joints negated).
+# Used as init_qpos so the IK starts in-range (the shoulder rolls' ref=∓1.5708 lies
+# outside the bitbots-derived limits) and close to where most motions begin.
+# NOTE: leg values confirmed; arm values are provisional (arm convention still under review).
+PI_FOOTBALL_WALKREADY = {
+    "l_hip_pitch_joint": -0.6, "l_hip_roll_joint": 0.0, "l_thigh_joint": 0.0,
+    "l_calf_joint": 1.2, "l_ankle_pitch_joint": -0.6, "l_ankle_roll_joint": 0.0,
+    "r_hip_pitch_joint": -0.6, "r_hip_roll_joint": 0.0, "r_thigh_joint": 0.0,
+    "r_calf_joint": 1.2, "r_ankle_pitch_joint": -0.6, "r_ankle_roll_joint": 0.0,
+    "l_shoulder_pitch_joint": 1.57, "l_shoulder_roll_joint": 1.22,
+    "l_upper_arm_joint": 0.0, "l_elbow_joint": 0.0,
+    "r_shoulder_pitch_joint": 1.57, "r_shoulder_roll_joint": -1.22,
+    "r_upper_arm_joint": 0.0, "r_elbow_joint": 0.0,
+}
+
 if __name__ == "__main__":
     
     HERE = pathlib.Path(__file__).parent
@@ -112,6 +128,7 @@ if __name__ == "__main__":
         actual_human_height=actual_human_height,
         src_human="smplx",
         tgt_robot=args.robot,
+        init_qpos=PI_FOOTBALL_WALKREADY if args.robot == "pi_football" else None,
     )
     
     robot_motion_viewer = None
@@ -185,16 +202,19 @@ if __name__ == "__main__":
         root_rot = np.array([qpos[3:7][[1,2,3,0]] for qpos in qpos_list])
         dof_pos = np.array([qpos[7:] for qpos in qpos_list])
         
-        # GMR output order: l_leg(0-5), l_arm(6-10, last=l_wrist), r_leg(11-16), r_arm(17-21, last=r_wrist)
-        # Target CSV order: l_leg → r_leg → l_arm → r_arm
-        l_arm_src = [6, 7, 8, 9, 10] if args.keep_wrist else [6, 7, 8, 9]
-        r_arm_src = [17, 18, 19, 20, 21] if args.keep_wrist else [17, 18, 19, 20]
-        reorder_indices = (
-            [0, 1, 2, 3, 4, 5]
-            + [11, 12, 13, 14, 15, 16]
-            + l_arm_src
-            + r_arm_src
+        # Reorder GMR model dof order -> target CSV order (l_leg -> r_leg -> l_arm -> r_arm)
+        # by joint NAME, so it stays correct regardless of the model's joint set/order
+        # (the GMR pi model has no wrist joints anymore). The dof_pos column for a joint
+        # is its dof index minus 6 (the free base occupies dof 0-5 / qpos 0-6).
+        csv_joint_order = (
+            ['l_hip_pitch', 'l_hip_roll', 'l_thigh', 'l_calf', 'l_ankle_pitch', 'l_ankle_roll']
+            + ['r_hip_pitch', 'r_hip_roll', 'r_thigh', 'r_calf', 'r_ankle_pitch', 'r_ankle_roll']
+            + ['l_shoulder_pitch', 'l_shoulder_roll', 'l_upper_arm', 'l_elbow']
+            + ['r_shoulder_pitch', 'r_shoulder_roll', 'r_upper_arm', 'r_elbow']
         )
+        if args.keep_wrist:
+            print("[warn] --keep_wrist ignored: wrist joints were removed from the GMR pi model")
+        reorder_indices = [retarget.robot_dof_names[f"{j}_joint"] - 6 for j in csv_joint_order]
         dof_pos = dof_pos[:, reorder_indices]
 
         # Check if save as CSV format
@@ -208,18 +228,7 @@ if __name__ == "__main__":
                 header.extend([f'root rot {i}' for i in ['x','y','z','w']])
                 
                 # Joint names matching reorder_indices order (pi_plus has no waist/head joints)
-                l_arm_names = ['l_shoulder_pitch', 'l_shoulder_roll', 'l_upper_arm', 'l_elbow']
-                r_arm_names = ['r_shoulder_pitch', 'r_shoulder_roll', 'r_upper_arm', 'r_elbow']
-                if args.keep_wrist:
-                    l_arm_names.append('l_wrist')
-                    r_arm_names.append('r_wrist')
-                joint_names = (
-                    ['l_hip_pitch', 'l_hip_roll', 'l_thigh', 'l_calf', 'l_ankle_pitch', 'l_ankle_roll']
-                    + ['r_hip_pitch', 'r_hip_roll', 'r_thigh', 'r_calf', 'r_ankle_pitch', 'r_ankle_roll']
-                    + l_arm_names
-                    + r_arm_names
-                )
-                header.extend(joint_names)
+                header.extend(csv_joint_order)
                 writer.writerow(header)
 
                 # 按帧写入数据

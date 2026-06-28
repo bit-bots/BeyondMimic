@@ -20,13 +20,11 @@
         "left_shoulder": 0.4,
         "right_shoulder": 0.4,
         "left_elbow": 0.48,
-        "right_elbow": 0.48,
-        "left_wrist": 0.48,
-        "right_wrist": 0.48
+        "right_elbow": 0.48
     },
 
     "ik_match_table1": {
-      
+
         "l_hip_roll_link": [
             "left_hip",
             0,
@@ -171,22 +169,6 @@
                 0.0
             ]
         ],
-        "l_wrist_link": [
-            "left_wrist",
-            0,
-            10,
-            [
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.70710678,
-                0.0,
-                -0.70710678,
-                0.0
-            ]
-        ],
         "r_upper_arm_link": [
             "right_shoulder",
             0,
@@ -205,22 +187,6 @@
         ],
         "r_elbow_link": [
             "right_elbow",
-            0,
-            10,
-            [
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.0,
-                0.70710678,
-                0.0,
-                0.70710678
-            ]
-        ],
-        "r_wrist_link": [
-            "right_wrist",
             0,
             10,
             [
@@ -237,7 +203,7 @@
         ]
     },
    "ik_match_table2": {
-               
+
         "l_hip_roll_link": [
             "left_hip",
             10,
@@ -373,22 +339,6 @@
                 0.0
             ]
         ],
-        "l_wrist_link": [
-            "left_wrist",
-            10,
-            5,
-            [
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.70710678,
-                0.0,
-                -0.70710678,
-                0.0
-            ]
-        ],
         "r_upper_arm_link": [
             "right_shoulder",
             10,
@@ -407,22 +357,6 @@
         ],
         "r_elbow_link": [
             "right_elbow",
-            10,
-            5,
-            [
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.0,
-                0.70710678,
-                0.0,
-                0.70710678
-            ]
-        ],
-        "r_wrist_link": [
-            "right_wrist",
             10,
             5,
             [

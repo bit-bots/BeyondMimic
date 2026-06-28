@@ -19,6 +19,7 @@ class GeneralMotionRetargeting:
         damping: float=5e-1, # change from 1e-1 to 1e-2.
         verbose: bool=True,
         use_velocity_limit: bool=True,
+        init_qpos: dict=None,  # {joint_name: qpos} seed pose for the IK (overrides qpos0)
     ) -> None:
 
         # load the robot model
@@ -98,15 +99,31 @@ class GeneralMotionRetargeting:
         self.ik_limits = [mink.ConfigurationLimit(self.model)]
         if use_velocity_limit:
             VELOCITY_LIMITS = {k: 3*np.pi for k in self.robot_motor_names.keys()}
-            self.ik_limits.append(mink.VelocityLimit(self.model, VELOCITY_LIMITS)) 
-            
+            self.ik_limits.append(mink.VelocityLimit(self.model, VELOCITY_LIMITS))
+
+        self.init_qpos = init_qpos
         self.setup_retarget_configuration()
         
         self.ground_offset = 0.0
 
     def setup_retarget_configuration(self):
         self.configuration = mink.Configuration(self.model)
-    
+
+        # Seed the IK from a provided pose (joint_name -> qpos). The default seed is
+        # qpos0 (= each joint's `ref`); for joints whose `ref` lies outside their
+        # range (e.g. the pi shoulder rolls) this violates the configuration limits
+        # and mink raises on the first solve. A walkready seed avoids that and starts
+        # most motions close to their first frame.
+        if self.init_qpos:
+            q = self.configuration.data.qpos.copy()
+            for jname, val in self.init_qpos.items():
+                jid = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, jname)
+                if jid == -1:
+                    print(f"[GMR] init_qpos: joint '{jname}' not found, skipping")
+                    continue
+                q[self.model.jnt_qposadr[jid]] = val
+            self.configuration.update(q=q)
+
         self.tasks1 = []
         self.tasks2 = []
         
