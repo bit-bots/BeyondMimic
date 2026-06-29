@@ -101,7 +101,7 @@ ROBOT_CONFIGS = {
     },
     "pi_plus": {
         "num_actions": 20,
-        "num_obs": 115,  # FULL variant (Tracking-Flat-PI-Plus-v0): incl. motion_anchor_pos_b + base_lin_vel
+        "num_obs": 115,  # fallback default (FULL/v0: incl. motion_anchor_pos_b + base_lin_vel); the actual value is auto-detected from the ONNX policy. Wo/deploy = 109.
         "reference_body": "base_link",
         "default_xml": None,  # Must be provided
         # bitbots pi_plus: 20 DoF (no wrists -> fixed, no head -> fixed).
@@ -304,12 +304,29 @@ def create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, 
     return obs
 
 
+def _onnx_input_dim(model) -> "int | None":
+    """Policy's expected observation width, read from the ONNX graph.
+
+    The motion policy is exported with inputs ["obs", "time_step"] (see
+    utils/exporter.py); we read the trailing dim of the "obs" tensor. Returns
+    None if the graph carries no static shape (older export), so callers can
+    fall back to the static ROBOT_CONFIGS default.
+    """
+    for inp in model.graph.input:
+        if inp.name == "obs":
+            try:
+                return inp.type.tensor_type.shape.dim[-1].dim_value or None
+            except (IndexError, AttributeError):
+                return None
+    return None
+
+
 def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path: str, save_json: bool = False, loop: bool = False,
                    headless: bool = False, video: bool = False, video_length: int = 0):
     """Run the sim2sim simulation."""
     config = ROBOT_CONFIGS[robot_type]
     print(f"[INFO]: Using robot configuration: {robot_type}")
-    print(f"[INFO]: Actions: {config['num_actions']}, Observations: {config['num_obs']}")
+    print(f"[INFO]: Actions: {config['num_actions']}, Observations (config default): {config['num_obs']} (auto-detected from the ONNX policy below)")
     
     # Load motion data
     motion = np.load(motion_file)
@@ -360,11 +377,12 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
     stiffness_array_seq = None
     damping_array_seq = None
     action_scale = None
-    
+    observation_names = None
+
     for prop in model.metadata_props:
         if prop.key == "joint_names":
             joint_seq = prop.value.split(",")
-        elif prop.key == "default_joint_pos":   
+        elif prop.key == "default_joint_pos":
             joint_pos_array_seq = np.array([float(x) for x in prop.value.split(",")])
         elif prop.key == "joint_stiffness":
             stiffness_array_seq = np.array([float(x) for x in prop.value.split(",")])
@@ -372,6 +390,8 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
             damping_array_seq = np.array([float(x) for x in prop.value.split(",")])
         elif prop.key == "action_scale":
             action_scale = np.array([float(x) for x in prop.value.split(",")])
+        elif prop.key == "observation_names":
+            observation_names = [n.strip() for n in prop.value.split(",") if n.strip()]
         print(f"{prop.key}: {prop.value}")
     
     # Remap to XML joint order
@@ -397,9 +417,40 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
     print("damping_array", damping_array)
     print("action_scale", action_scale)
     
+    # --- Auto-detect the observation variant from the exported ONNX ----------
+    # Which optional terms are present comes from the active `observation_names`
+    # metadata; the policy's true input width (from the ONNX graph) is the source
+    # of truth for num_obs. Both fall back to the static ROBOT_CONFIGS entry for
+    # older exports that lack this metadata.
+    full_obs_struct = config["observation_structure"]
+    if observation_names is not None:
+        has_motion_anchor_pos_b = "motion_anchor_pos_b" in observation_names
+        has_base_lin_vel = "base_lin_vel" in observation_names
+    else:
+        has_motion_anchor_pos_b = "motion_anchor_pos_b" in full_obs_struct
+        has_base_lin_vel = "base_lin_vel" in full_obs_struct
+
+    num_obs = _onnx_input_dim(model)
+    if num_obs is None:
+        # No static shape in the graph: sum the active terms of the template.
+        num_obs = sum(
+            sz for k, sz in full_obs_struct.items()
+            if not (k == "motion_anchor_pos_b" and not has_motion_anchor_pos_b)
+            and not (k == "base_lin_vel" and not has_base_lin_vel)
+        )
+    variant = "FULL (v0)" if (has_motion_anchor_pos_b and has_base_lin_vel) else "Wo/deploy"
+    print(
+        f"[INFO]: Observation variant: {variant} | num_obs={num_obs} "
+        f"(motion_anchor_pos_b={has_motion_anchor_pos_b}, base_lin_vel={has_base_lin_vel})"
+    )
+    if num_obs != config["num_obs"]:
+        print(
+            f"[INFO]: Detected num_obs {num_obs} != ROBOT_CONFIGS default "
+            f"{config['num_obs']}; using detected value from the ONNX policy."
+        )
+
     # Initialize variables
     num_actions = config["num_actions"]
-    num_obs = config["num_obs"]
     action = np.zeros(num_actions, dtype=np.float32)
     obs = np.zeros(num_obs, dtype=np.float32)
     counter = 0
@@ -528,15 +579,15 @@ def run_simulation(robot_type: str, motion_file: str, xml_path: str, policy_path
                     qvel_xml = d.qvel[6:6 + num_actions]
                     qvel_seq = np.array([qvel_xml[joint_xml.index(joint)] for joint in joint_seq])
 
-                    # Privileged terms for the FULL obs variant. Config-driven so the
-                    # deploy/Wo layout and the `hi` robot keep their original 6-group obs.
-                    obs_struct = config["observation_structure"]
+                    # Optional privileged terms (FULL variant only). Presence is
+                    # auto-detected from the ONNX `observation_names`; the Wo/deploy
+                    # layout and the `hi` robot leave them out.
                     motion_anchor_pos_b = None
-                    if "motion_anchor_pos_b" in obs_struct:
+                    if has_motion_anchor_pos_b:
                         # motion anchor pos expressed in the robot anchor (base_link) frame:
                         # R_robot^T (motion_anchor_pos_w - robot_anchor_pos_w)
                         motion_anchor_pos_b = quat_rotate_inverse_np(quat, motionposcurrent - d.qpos[:3])
-                    base_lin_vel = v if "base_lin_vel" in obs_struct else None
+                    base_lin_vel = v if has_base_lin_vel else None
 
                     obs = create_observation_hi_pi(obs, offset, motioninput, motion_ref_ori_b, omega, qpos_seq, qvel_seq, action_buffer, joint_pos_array_seq, num_actions, motion_anchor_pos_b=motion_anchor_pos_b, base_lin_vel=base_lin_vel)
                 

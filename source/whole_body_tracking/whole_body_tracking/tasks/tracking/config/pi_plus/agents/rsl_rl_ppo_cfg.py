@@ -31,6 +31,17 @@ class PiPlusFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     )
 
 
+@configclass
+class PiPlusFlatWoPPORunnerCfg(PiPlusFlatPPORunnerCfg):
+    """Runner for the Wo/deploy obs variant (no motion_anchor_pos_b, no base_lin_vel).
+
+    Identical PPO hyper-parameters; only the log/checkpoint folder differs so Wo
+    runs don't collide with the FULL (v0) runs under the shared "pi_plus_flat".
+    """
+
+    experiment_name = "pi_plus_flat_wo"
+
+
 LOW_FREQ_SCALE = 0.5
 
 
