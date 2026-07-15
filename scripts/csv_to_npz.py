@@ -26,9 +26,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
-import math
 import numpy as np
-import os
 
 from isaaclab.app import AppLauncher
 
@@ -48,10 +46,8 @@ parser.add_argument(
 )
 parser.add_argument("--output_name", type=str, required=True, help="The name of the motion npz file.")
 parser.add_argument("--output_fps", type=int, default=50, help="The fps of the output motion.")
-parser.add_argument("--robot", type=str, choices=["g1", "hi", "pi_plus","pi_plus_waist_shell","pi_plus_head"], required=True, 
+parser.add_argument("--robot", type=str, choices=["g1", "hi", "pi_plus","pi_plus_waist_shell","pi_plus_head"], required=True,
                    help="Robot type: g1 (Unitree G1), hi (Unitree Hi), pi_plus (PI Plus),pi_plus_head")
-parser.add_argument("--no_wandb", action="store_true", help="Skip WandB upload and save NPZ locally only.")
-parser.add_argument("--save_to", type=str, default="/tmp/", help="Path to save the generated npz.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -563,27 +559,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
             np.savez(output_file, **log)
             print(f"[INFO]: Motion saved locally to: {output_file}")
 
-            # WandB upload logic
-            use_wandb = (not args_cli.no_wandb) and (
-                os.environ.get("WANDB_DISABLED", "").lower() not in ["1", "true", "yes"]
-            )
-            
-            if use_wandb:
-                wandb_temp_file = os.path.join(args_cli.save_to, "motion.npz")
-                np.savez(wandb_temp_file, **log)
-                
-                import wandb
-
-                # Extract just the filename without path and extension for artifact name
-                COLLECTION = os.path.splitext(os.path.basename(args_cli.output_name))[0]
-                run = wandb.init(project="csv_to_npz", name=COLLECTION)
-                print(f"[INFO]: Logging motion to wandb: {COLLECTION}")
-                REGISTRY = "motions"
-                logged_artifact = run.log_artifact(artifact_or_path=wandb_temp_file, name=COLLECTION, type=REGISTRY)
-                run.link_artifact(artifact=logged_artifact, target_path=f"wandb-registry-{REGISTRY}/{COLLECTION}")
-                print(f"[INFO]: Motion saved to wandb registry: {REGISTRY}/{COLLECTION}")
-            else:
-                print("[INFO]: Skipped WandB upload (--no_wandb flag used)")
             # Set flag to exit loop
             print("[INFO]: File saved, breaking loop...")
             break  # Immediately break out of the loop
