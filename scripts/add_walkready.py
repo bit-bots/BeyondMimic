@@ -11,6 +11,12 @@ smoothly (no abrupt velocity jump). Output goes to <input>_walkready.csv.
                    everything after (back-fade-start + back-fade-len) is discarded.
                    --back-fast-* fades selected joints faster (e.g. a broken IK arm).
 
+  --joint-only:    keep the source frame's root pose (position + orientation) instead
+                   of forcing an upright, standing-height walkready root. Only the joints
+                   fade to the walkready targets. Use this to bracket a non-upright motion
+                   (e.g. lying supine): the joints reach walkready while the body stays on
+                   its back, exactly as the motion already has it.
+
 The walkready pose is written so that scripts/csv_to_npz.py (which sign-flips the
 joints in INV) reproduces the SIM-convention targets in WALKREADY_SIM.
 
@@ -139,15 +145,24 @@ def load_csv(path):
     return header, data
 
 
-def make_walkready(x, y, yaw, frame0):
+def make_walkready(src, joint_only=False):
+    """Build a walkready pose vector [pos(3), quat xyzw(4), dofs(20)] from a source row.
+
+    Normal mode reroots the pose upright: root x/y from ``src``, z=WALKREADY_Z (standing
+    height), quat = upright at ``src``'s yaw. joint_only keeps ``src``'s full root pose
+    (position AND orientation) untouched and only swaps in the walkready joint targets --
+    used to bracket a non-upright motion (e.g. lying supine) without lifting/righting it.
+    """
     joints = np.zeros(len(CSV_JOINTS))
     for k, j in enumerate(CSV_JOINTS):
         if j in WALKREADY_SIM:  # fixed target: sim -> csv (negate the inverted ones)
             v = WALKREADY_SIM[j]
             joints[k] = -v if j in INV else v
-        else:  # fallback for any joint without a target: keep the input's frame-0 value
-            joints[k] = frame0[7 + k]
-    return np.concatenate([[x, y, WALKREADY_Z], upright_quat(yaw), joints])
+        else:  # fallback for any joint without a target: keep the source frame's value
+            joints[k] = src[7 + k]
+    if joint_only:
+        return np.concatenate([src[0:3], src[3:7], joints])  # keep root pos + orientation
+    return np.concatenate([[src[0], src[1], WALKREADY_Z], upright_quat(yaw_of(src[3:7])), joints])
 
 
 def build(header, data, args):
@@ -185,11 +200,11 @@ def build(header, data, args):
                   f"clamping (tail held).")
 
     # poses
-    wr_start = make_walkready(frame0[0], frame0[1], yaw_of(frame0[3:7]), frame0)
+    wr_start = make_walkready(frame0, joint_only=args.joint_only)
     wr_end = None
     if do_back:
         oe = row(S + bl)
-        wr_end = make_walkready(oe[0], oe[1], yaw_of(oe[3:7]), frame0)
+        wr_end = make_walkready(oe, joint_only=args.joint_only)
 
     seq = []
     # ---- front ----
@@ -286,6 +301,9 @@ def parse_args(argv=None):
                    help="faster fade length for selected back joints (e.g. a broken IK arm)")
     p.add_argument("--back-fast-joints", type=str, default=",".join(DEFAULT_FAST_JOINTS),
                    help="comma-separated joints for --back-fast-fade-len")
+    p.add_argument("--joint-only", action="store_true",
+                   help="keep the source frame's root pose (position + orientation); only the "
+                        "joints fade to walkready. Use for non-upright motions (e.g. supine).")
     p.add_argument("--hold-front", type=int, default=6, help="static walkready frames at the very start")
     p.add_argument("--hold-back", type=int, default=30, help="static walkready frames at the very end")
     p.add_argument("--output", type=str, default=None, help="output path (default: <input>_walkready.csv)")
