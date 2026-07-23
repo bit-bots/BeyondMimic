@@ -84,6 +84,24 @@ class PIPLUSFlatWoEnvCfg(PIPLUSFlatEnvCfg):
         super().__post_init__()
         self.observations.policy.motion_anchor_pos_b = None
         self.observations.policy.base_lin_vel = None
+
+        # Feet-slide penalty (Isaac-Lab-style, per-foot): punish a planted foot that drifts
+        # across the floor. Only added to the Wo/deploy variant, where reduced foot slip helps
+        # sim2real (less base drift, cleaner odometry, less foot wear). Weight is intentionally
+        # modest so it nudges rather than fights the motion-tracking objective; tune as needed.
+        self.rewards.feet_slide = RewTerm(
+            func=mdp.feet_slide,
+            weight=-0.75,
+            params={
+                "sensor_cfg": SceneEntityCfg(
+                    "contact_forces", body_names=["l_ankle_roll_link", "r_ankle_roll_link"]
+                ),
+                "asset_cfg": SceneEntityCfg(
+                    "robot", body_names=["l_ankle_roll_link", "r_ankle_roll_link"]
+                ),
+            },
+        )
+
         self.events.physics_material = EventTerm(
             func=mdp.randomize_rigid_body_material,
             mode="startup",

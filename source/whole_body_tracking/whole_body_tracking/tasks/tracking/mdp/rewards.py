@@ -80,3 +80,29 @@ def feet_contact_time(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, thresh
     last_contact_time = contact_sensor.data.last_contact_time[:, sensor_cfg.body_ids]
     reward = torch.sum((last_contact_time < threshold) * first_air, dim=-1)
     return reward
+
+
+def feet_slide(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize feet sliding while in ground contact.
+
+    Mirrors Isaac Lab's canonical ``feet_slide`` locomotion reward: for every selected foot body the
+    horizontal (xy) linear velocity of that body is multiplied by a binary ground-contact flag and
+    summed over feet. A foot is therefore only penalized while it is actually planted, so a planted
+    foot that drifts across the floor is punished while a foot swinging through the air is not.
+
+    ``sensor_cfg`` selects the feet on the contact-force sensor (used for the contact flag) and
+    ``asset_cfg`` selects the same feet on the articulation (used for the body velocity); pass the
+    identical body names to both.
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    # binary contact per selected foot: max net contact-force magnitude over the sensor history > 1 N
+    contacts = (
+        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+    )
+    asset = env.scene[asset_cfg.name]
+    body_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
+    return torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
