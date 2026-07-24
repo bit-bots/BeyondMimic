@@ -78,6 +78,22 @@ class PIPLUSFlatEnvCfg(TrackingEnvCfg):
             },
         )
 
+        # Randomize link masses (±8 %) to cover sim2real gaps such as a heavier
+        # shell/cladding on the real robot. Inertia is recomputed so it scales with
+        # the mass. This is the only mass/inertia-scale axis of domain randomization;
+        # COM position is handled separately by base_com above.
+        self.events.randomize_mass = EventTerm(
+            func=mdp.randomize_rigid_body_mass,
+            mode="startup",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+                "mass_distribution_params": (0.92, 1.08),  # ±8 % scale
+                "operation": "scale",
+                "distribution": "uniform",
+                "recompute_inertia": True,
+            },
+        )
+
 @configclass
 class PIPLUSFlatWoEnvCfg(PIPLUSFlatEnvCfg):
     def __post_init__(self):
