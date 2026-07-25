@@ -127,7 +127,7 @@ class CommandsCfg:
             "yaw": (-0.2, 0.2),              # Yaw angle offset (rad)
         },
         velocity_range=VELOCITY_RANGE,        # Speed randomization range
-        joint_position_range=(-0.1, 0.1),    # Range of joint position randomization (rad)
+        joint_position_range=(-0.2, 0.2),    # Range of joint position randomization (rad)
     )
 
 
