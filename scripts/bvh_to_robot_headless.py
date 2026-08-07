@@ -3,6 +3,8 @@ import pathlib
 import csv
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting.utils.lafan1 import load_lafan1_file
+from general_motion_retargeting.utils.cmu_bvh import is_cmu_bvh, load_cmu_bvh_file
+from smplx_to_pi_plus import PI_FOOTBALL_WALKREADY
 from rich import print
 from tqdm import tqdm
 import os
@@ -53,14 +55,22 @@ if __name__ == "__main__":
         os.makedirs(save_dir, exist_ok=True)
     qpos_list = []
 
-    # Load SMPLX trajectory
-    lafan1_data_frames, actual_human_height = load_lafan1_file(args.bvh_file)
+    # Load SMPLX trajectory. CMU-style skeletons (soccer_kicks) carry extra bones,
+    # a ~15.9-units-per-metre scale and different bone axes, so they go through a
+    # loader that converts them to LAFAN1 convention first.
+    if is_cmu_bvh(args.bvh_file):
+        lafan1_data_frames, actual_human_height = load_cmu_bvh_file(args.bvh_file)
+    else:
+        lafan1_data_frames, actual_human_height = load_lafan1_file(args.bvh_file)
 
-    # Initialize the retargeting system
+    # Initialize the retargeting system. pi_football needs the walkready seed: the
+    # shoulder rolls' ref=∓1.5708 lies outside the bitbots-derived limits, so the
+    # default qpos0 seed makes mink raise on the first solve.
     retargeter = GMR(
         src_human="bvh",
         tgt_robot=args.robot,
         actual_human_height=actual_human_height,
+        init_qpos=PI_FOOTBALL_WALKREADY if args.robot == "pi_football" else None,
     )
 
     motion_fps = 30
@@ -78,15 +88,15 @@ if __name__ == "__main__":
     root_rot = np.array([qpos[3:7][[1, 2, 3, 0]] for qpos in qpos_list])
     dof_pos = np.array([qpos[7:] for qpos in qpos_list])
 
-    # GMR output order: l_leg(0-5), l_arm(6-10, last=l_wrist), r_leg(11-16), r_arm(17-21, last=r_wrist)
+    # GMR output order: l_leg(0-5), l_arm(6-9), r_leg(10-15), r_arm(16-19).
+    # The wrist joints were commented out of the pi XML in 64bef26, so the model
+    # went 22 -> 20 DoF and everything from index 10 on shifted down by two.
     # Target CSV order: l_leg → r_leg → l_arm → r_arm
-    l_arm_src = [6, 7, 8, 9, 10] if args.keep_wrist else [6, 7, 8, 9]
-    r_arm_src = [17, 18, 19, 20, 21] if args.keep_wrist else [17, 18, 19, 20]
     reorder_indices = (
         [0, 1, 2, 3, 4, 5]
-        + [11, 12, 13, 14, 15, 16]
-        + l_arm_src
-        + r_arm_src
+        + [10, 11, 12, 13, 14, 15]
+        + [6, 7, 8, 9]
+        + [16, 17, 18, 19]
     )
     dof_pos = dof_pos[:, reorder_indices]
     # Save as CSV
