@@ -5,6 +5,8 @@ import csv
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
 from general_motion_retargeting.utils.lafan1 import load_lafan1_file
+from general_motion_retargeting.utils.cmu_bvh import is_cmu_bvh, load_cmu_bvh_file
+from smplx_to_pi_plus import PI_FOOTBALL_WALKREADY
 from rich import print
 from tqdm import tqdm
 import os
@@ -69,15 +71,23 @@ if __name__ == "__main__":
         qpos_list = []
 
     
-    # Load SMPLX trajectory
-    lafan1_data_frames, actual_human_height = load_lafan1_file(args.bvh_file)
-    
-    
-    # Initialize the retargeting system
+    # Load SMPLX trajectory. CMU-style skeletons (soccer_kicks) carry extra bones,
+    # a ~15.9-units-per-metre scale and different bone axes, so they go through a
+    # loader that converts them to LAFAN1 convention first.
+    if is_cmu_bvh(args.bvh_file):
+        lafan1_data_frames, actual_human_height = load_cmu_bvh_file(args.bvh_file)
+    else:
+        lafan1_data_frames, actual_human_height = load_lafan1_file(args.bvh_file)
+
+
+    # Initialize the retargeting system. pi_football needs the walkready seed: the
+    # shoulder rolls' ref=∓1.5708 lies outside the bitbots-derived limits, so the
+    # default qpos0 seed makes mink raise on the first solve.
     retargeter = GMR(
         src_human="bvh",
         tgt_robot=args.robot,
         actual_human_height=actual_human_height,
+        init_qpos=PI_FOOTBALL_WALKREADY if args.robot == "pi_football" else None,
     )
 
     motion_fps = 30
