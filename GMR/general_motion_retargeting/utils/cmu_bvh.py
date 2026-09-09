@@ -210,33 +210,15 @@ def load_cmu_bvh_file(bvh_file, verbose=True):
         corrections[cmu_bone] = (
             g_cmu.inv() * world_rot.inv() * posture * world_rot * g_lafan
         )
-
-        # Pi Plus fix: LeftArm's axial roll (twist about the bone's own +X axis)
-        # is unobservable from a T-pose by construction -- position data alone
-        # can't distinguish it, so it silently follows LAFAN1's own convention
-        # (see the "posture" comment above). For this CMU dataset that leaves a
-        # ~180 deg twist error, confirmed constant across every CMU clip checked
-        # (CMU's frame 0 bakes a fixed bind pose independent of the captured
-        # motion, so the derived correction -- and this error -- is identical
-        # for all of them).
-        #
-        # The whole LeftArm/LeftForeArm/LeftHand chain needs the SAME twist
-        # applied, not just LeftArm: each bone's correction is independently
-        # derived as an absolute-world target, so twisting only the shoulder
-        # leaves the elbow bridging a now-mismatched gap between a rotated
-        # upper-arm target and untouched forearm/hand targets -- visibly
-        # breaking the arm. Rotating all three together instead leaves their
-        # RELATIVE orientation (elbow bend, wrist pose) unchanged and just
-        # reorients the whole chain, matching a real T-pose calibration fix.
-        # Verified on 69_34.bvh: with only LeftArm twisted, l_upper_arm_joint
-        # stops pinning at its range limit but the arm looks broken in the
-        # viewer; with the whole chain twisted, l_upper_arm settles near 0 deg
-        # (matching bitbots_main's real walkready pose) and l_shoulder_pitch
-        # (~93 deg) / l_shoulder_roll (~73 deg) land close to walkready's 90/70
-        # deg too, with the elbow bend symmetric to the (already-correct)
-        # right arm -- no pinning anywhere.
-        if cmu_bone in ("LeftArm", "LeftForeArm", "LeftHand"):
-            corrections[cmu_bone] = corrections[cmu_bone] * R.from_rotvec([np.pi, 0.0, 0.0])
+        # NOTE: LeftArm/LeftForeArm/LeftHand's ~180 deg axial-twist error (a
+        # T-pose can't observe twist, so it silently follows LAFAN1's own
+        # convention -- see the "posture" comment above) is NOT fixed here.
+        # This loader's whole job is converting CMU into LAFAN1's own bone
+        # convention, so whatever twist error LAFAN1 itself has for these
+        # bones, CMU inherits identically -- fixing it only here would make
+        # CMU and native LAFAN1 clips disagree. Fixed once, for both sources,
+        # on the l_upper_arm_link/l_elbow_link/l_wrist_link entries in
+        # ik_configs/bvh_to_pi_football.json instead.
 
     # --- resample ----------------------------------------------------------
     src_fps = 1.0 / _read_frame_time(bvh_file)
