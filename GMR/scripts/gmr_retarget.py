@@ -16,9 +16,9 @@ which):
   3. Convert to whatever downstream training format you need (e.g.
      AMP_mjlab's scripts/piplus_gmr_to_amp.py for AMP-style motion imitation).
 
-Usage (GMR venv, from this repo's root):
-  gmrvenv/bin/python GMR/scripts/gmr_retarget.py --start 900 --end 3900
-  gmrvenv/bin/python GMR/scripts/gmr_retarget.py --bvh /path/to/cmu_kick.bvh --out out.npz
+Usage (GMR venv; run from the directory containing both gmrvenv/ and BeyondMimic/):
+  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_retarget.py --start 900 --end 3900
+  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_retarget.py --bvh /path/to/cmu_kick.bvh --out out.npz
 
 ROBOT_XML below points at a specific downstream project's Pi Plus MJCF,
 verified (via a 1000-random-config FK comparison) to exactly match the real
