@@ -53,6 +53,10 @@ from general_motion_retargeting.utils.cmu_bvh import (  # noqa: E402
   load_cmu_bvh_file,
 )
 from general_motion_retargeting.utils.lafan1 import load_lafan1_file  # noqa: E402
+from general_motion_retargeting.utils.style100_bvh import (  # noqa: E402
+  is_100style_bvh,
+  load_style100_bvh_file,
+)
 
 # Standing seed in ROBOT_XML's qpos convention (mirrored, in-range). Seeds the
 # IK away from the out-of-range shoulder-roll refs.
@@ -103,8 +107,12 @@ def main() -> None:
   if args.ik_config_path is not None:
     gmr_params.IK_CONFIG_DICT["bvh"]["pi_football"] = Path(args.ik_config_path)
 
-  cmu = is_cmu_bvh(args.bvh)
-  frames, human_height = (load_cmu_bvh_file if cmu else load_lafan1_file)(args.bvh)
+  if is_cmu_bvh(args.bvh):
+    frames, human_height = load_cmu_bvh_file(args.bvh)
+  elif is_100style_bvh(args.bvh):
+    frames, human_height = load_style100_bvh_file(args.bvh)
+  else:
+    frames, human_height = load_lafan1_file(args.bvh)
   end = len(frames) if args.end < 0 else min(args.end, len(frames))
   print(f"bvh {len(frames)} frames, h {human_height:.3f}; retargeting [{args.start}:{end}] "
         f"to {ROBOT_XML} (root_blend={args.root_blend})")
