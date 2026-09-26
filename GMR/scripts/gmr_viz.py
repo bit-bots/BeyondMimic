@@ -6,12 +6,17 @@ orientation and left/right symmetry.
 
 Usage (GMR venv; run from the directory containing both gmrvenv/ and BeyondMimic/):
   gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_viz.py --npz /path/to/retarget_output.npz --port 8080
+  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_viz.py --npz /path/to/dir_of_npz --port 8080
+
+If --npz is a directory, the viewer shows one button per clip. All clips
+must use the same robot XML.
 """
 
 from __future__ import annotations
 
 import argparse
 import time
+from pathlib import Path
 
 import mujoco as mj
 import numpy as np
@@ -34,11 +39,15 @@ def main() -> None:
   ap.add_argument("--port", type=int, default=8080)
   args = ap.parse_args()
 
-  data = np.load(args.npz, allow_pickle=True)
-  qpos = data["qpos"]
-  xml = str(data["xml"])
-  fps = float(data["fps"])
-  print(f"qpos {qpos.shape}, xml {xml}, fps {fps}")
+  src = Path(args.npz)
+  paths = sorted(src.glob("*.npz")) if src.is_dir() else [src]
+  clips = {}
+  for path in paths:
+    d = np.load(path, allow_pickle=True)
+    clips[path.stem] = (d["qpos"], str(d["xml"]), float(d["fps"]))
+  names = list(clips)
+  qpos, xml, fps = clips[names[0]]
+  print(f"{len(clips)} clip(s); first: qpos {qpos.shape}, xml {xml}, fps {fps}")
 
   model = mj.MjModel.from_xml_path(xml)
   mjdata = mj.MjData(model)
@@ -70,13 +79,35 @@ def main() -> None:
   )
   speed = server.gui.add_slider("Speed", min=0.1, max=2.0, step=0.1, initial_value=1.0)
   play = server.gui.add_button("Play / Pause")
+  # One button per clip: a dropdown is unusable on mobile (small tap target,
+  # scroll-vs-open conflicts).
+  if len(names) > 1:
+    current_label = server.gui.add_markdown(f"**Playing:** {names[0]}")
+
+    def select_clip(name: str) -> None:
+      nonlocal qpos, fps
+      qpos, _xml, fps = clips[name]
+      frame_slider.max = len(qpos) - 1
+      frame_slider.value = 0
+      current_label.content = f"**Playing:** {name}"
+
+    for name in names:
+      btn = server.gui.add_button(name)
+
+      def _make_handler(n: str):
+        def _(_e) -> None:
+          select_clip(n)
+
+        return _
+
+      btn.on_click(_make_handler(name))
 
   @play.on_click
   def _(_e) -> None:
     playing["v"] = not playing["v"]
 
   def render(frame: int) -> None:
-    mjdata.qpos[:] = qpos[frame]
+    mjdata.qpos[:] = qpos[min(frame, len(qpos) - 1)]
     mj.mj_forward(model, mjdata)
     for gid, h in handles:
       p = np.asarray(mjdata.geom_xpos[gid])

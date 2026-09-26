@@ -2,20 +2,34 @@
 convention, so bvh_to_pi_football.json applies unchanged -- same contract as
 cmu_bvh.py's load_cmu_bvh_file.
 
-100STYLE is an XSens motion-capture export, the same source format upstream
-GMR (github.com/YanjieZe/GMR) already has dedicated support for via its own
-ik_configs/bvh_xsens_to_g1.json, used alongside bvh_lafan1_to_g1.json for the
-same G1 robot body links. Since both configs target identical robot bodies
-from the same class of human motion, comparing their offset_quat values
-directly yields the fixed per-bone rotation that converts an XSens/100STYLE
-raw bone orientation into LAFAN1 convention:
+The per-bone correction comes from the rest pose of each skeleton. A BVH
+HIERARCHY has no rest rotations, so when all channels are zero, the global
+rotation of each bone is identity:
 
-  G_xsens(f) * offset_xsens == target == G_lafan1_equiv(f) * offset_lafan1
-  => G_xsens(f) * (offset_xsens * offset_lafan1^-1) == G_lafan1_equiv(f)
+  * 100STYLE rest pose is an exact T-pose (Y-up, faces +Z, arms on +-X,
+    legs and spine on -+Y, toe forward on +Z).
+  * LAFAN1 rest pose puts every bone on its local +X. Thus LAFAN1 needs a
+    non-identity global rotation to show a T-pose (LAFAN1_TPOSE_QUAT in
+    cmu_bvh.py).
 
-STYLE100_CORRECTIONS below is exactly (offset_xsens * offset_lafan1^-1) per
-bone, computed once from those two reference configs -- no T-pose scanning or
-per-clip calibration needed, unlike cmu_bvh.py's approach for CMU data.
+The same physical T-pose is identity in 100STYLE and G_lafan1(T) in LAFAN1,
+so
+
+  C_b = G_style100(T)^-1 * G_lafan1(T) = G_lafan1(T)
+
+and G_style100(f) * C_b gives the LAFAN1 convention in frame f. We use the
+exact axis-aligned value of G_lafan1(T). The measured LAFAN1_TPOSE_QUAT is
+within 2-20 deg of it, because the recorded LAFAN1 subjects did not hold a
+perfect T-pose (bent elbows and knees). The recorded values would add that
+posture to all output frames.
+
+Do not use offset_quat values from upstream GMR bvh_xsens_to_g1.json for
+this. The upstream xsens.py loader reads the file with its own BVHParser.
+That parser gives global rotations in a different frame than
+world_rot * read_bvh(). Most offsets in that config are identity, which
+is not correct for read_bvh() output. The correction that came from those
+offsets was 90-180 deg wrong on each bone, and the robot base was on its
+side (88 deg tilt).
 
 Per upstream's own xsens.py loader, "FootMod" bones there use the ANKLE's own
 raw orientation (not the toe's, unlike load_lafan1_file/load_cmu_bvh_file) --
@@ -52,25 +66,29 @@ STYLE100_TO_LAFAN1 = {
     "RightAnkle": "RightFootMod",
 }
 
-# Fixed per-bone correction (raw 100STYLE/XSens bone name -> quat, wxyz),
-# derived from bvh_xsens_to_g1.json vs bvh_lafan1_to_g1.json -- see module
-# docstring. G_style100(f) -> world_rot * G_style100(f) * correction puts
-# frame f into LAFAN1's convention, same formula cmu_bvh.py uses for CMU.
+# Fixed per-bone correction (raw 100STYLE bone name -> quat, wxyz). Each
+# value is the axis-aligned global rotation of the LAFAN1 bone in a T-pose
+# (see module docstring). The Hips value is the same as the Spine2 value,
+# because LAFAN1 Hips and Spine2 use the same axes. The ankles use the
+# LAFAN1 toe value, because the IK config reads FootMod with the toe
+# rotation. world_rot * G_style100(f) * correction puts frame f into
+# LAFAN1's convention, same formula cmu_bvh.py uses for CMU.
+_H = 0.70710678
 STYLE100_CORRECTIONS = {
-    "Hips": (0.5, -0.5, -0.5, -0.5),
-    "Chest4": (0.5, -0.5, -0.5, -0.5),
-    "LeftHip": (-0.5, -0.5, -0.5, 0.5),
-    "LeftKnee": (-0.5, -0.5, -0.5, 0.5),
-    "LeftAnkle": (-0.70710678, -0.70710678, 0.0, 0.0),
-    "RightHip": (-0.5, -0.5, -0.5, 0.5),
-    "RightKnee": (-0.5, -0.5, -0.5, 0.5),
-    "RightAnkle": (-0.70710678, -0.70710678, 0.0, 0.0),
-    "LeftShoulder": (0.5, -0.5, 0.5, 0.5),
-    "LeftElbow": (0.5, -0.5, 0.5, 0.5),
-    "LeftWrist": (0.5, -0.5, 0.5, 0.5),
-    "RightShoulder": (0.5, -0.5, 0.5, 0.5),
-    "RightElbow": (0.5, -0.5, 0.5, 0.5),
-    "RightWrist": (0.5, -0.5, 0.5, 0.5),
+    "Hips": (0.5, 0.5, 0.5, 0.5),
+    "Chest4": (0.5, 0.5, 0.5, 0.5),
+    "LeftHip": (0.5, 0.5, -0.5, -0.5),
+    "LeftKnee": (0.5, 0.5, -0.5, -0.5),
+    "LeftAnkle": (_H, 0.0, -_H, 0.0),
+    "RightHip": (0.5, 0.5, -0.5, -0.5),
+    "RightKnee": (0.5, 0.5, -0.5, -0.5),
+    "RightAnkle": (_H, 0.0, -_H, 0.0),
+    "LeftShoulder": (_H, -_H, 0.0, 0.0),
+    "LeftElbow": (_H, -_H, 0.0, 0.0),
+    "LeftWrist": (_H, -_H, 0.0, 0.0),
+    "RightShoulder": (0.0, 0.0, _H, -_H),
+    "RightElbow": (0.0, 0.0, _H, -_H),
+    "RightWrist": (0.0, 0.0, _H, -_H),
 }
 
 # Same height/scale assumption as load_lafan1_file/load_cmu_bvh_file --
