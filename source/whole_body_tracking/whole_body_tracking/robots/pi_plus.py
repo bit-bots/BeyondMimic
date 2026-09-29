@@ -40,29 +40,23 @@ PI_PLUS_CFG = ArticulationCfg(
             gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         ),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.3173),  # walkready pelvis height (miro_rad_walkready.npz frame 0)
+  init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.351),
         joint_pos={
             # Pitch joints have opposite signs L/R because the bitbots URDF uses
-            # mirrored rotation axes (see joint_inversions in csv_to_npz.py). The
+            # mirrored rotation axes. The
             # right hip/ankle pitch and the left calf are the inverted ones.
-            "l_hip_pitch_joint": -0.6,
+             "l_hip_pitch_joint": -0.6,
             "r_hip_pitch_joint": 0.6,
             "l_calf_joint": -1.2,
             "r_calf_joint": 1.2,
             "l_ankle_pitch_joint": -0.6,
             "r_ankle_pitch_joint": 0.6,
-            # Arms = walkready frame-0 from miro_rad_walkready.npz (sim convention,
-            # i.e. CSV frame 0 after csv_to_npz joint_inversions). NOT 0 — arms-down
-            # rest sits near the shoulder ref offset, not at 0.
-            "l_shoulder_pitch_joint": -1.663410,
-            "l_shoulder_roll_joint": -1.180453,
-            "l_upper_arm_joint": 0.222445,
-            "l_elbow_joint": -0.288728,
-            "r_shoulder_pitch_joint": 1.697383,
-            "r_shoulder_roll_joint": 1.166996,
-            "r_upper_arm_joint": -0.305506,
-            "r_elbow_joint": 0.315797,
+            ".*_elbow_joint": 0.0,
+            "l_shoulder_roll_joint": 0.0,
+            "l_shoulder_pitch_joint": 0.0,
+            "r_shoulder_roll_joint": 0.0,
+            "r_shoulder_pitch_joint": 0.0,
         },
         joint_vel={".*": 0.0},
     ),
