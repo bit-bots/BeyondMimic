@@ -13,19 +13,21 @@ from general_motion_retargeting.utils.smpl import load_smplx_file, get_smplx_dat
 
 from rich import print
 
-# walkready seed for the GMR IK, in GMR/CSV convention (= SIM values from
-# scripts/add_walkready.py WALKREADY_SIM, with the csv_to_npz INV joints negated).
+# walkready seed for the GMR IK. GMR now retargets against the bitbots MJCF, so this
+# is the SIM convention directly -- identical to WALKREADY_SIM in
+# scripts/add_walkready.py, which it must keep matching. (It used to be that table
+# with the csv_to_npz "joint_inversions" joints negated, back when GMR used the
+# bundled pi_22dof_0826.xml, whose axis signs differed on 9 joints.)
 # Used as init_qpos so the IK starts in-range (the shoulder rolls' ref=∓1.5708 lies
 # outside the bitbots-derived limits) and close to where most motions begin.
-# NOTE: leg values confirmed; arm values are provisional (arm convention still under review).
 PI_FOOTBALL_WALKREADY = {
     "l_hip_pitch_joint": -0.6, "l_hip_roll_joint": 0.0, "l_thigh_joint": 0.0,
-    "l_calf_joint": 1.2, "l_ankle_pitch_joint": -0.6, "l_ankle_roll_joint": 0.0,
-    "r_hip_pitch_joint": -0.6, "r_hip_roll_joint": 0.0, "r_thigh_joint": 0.0,
-    "r_calf_joint": 1.2, "r_ankle_pitch_joint": -0.6, "r_ankle_roll_joint": 0.0,
+    "l_calf_joint": -1.2, "l_ankle_pitch_joint": -0.6, "l_ankle_roll_joint": 0.0,
+    "r_hip_pitch_joint": 0.6, "r_hip_roll_joint": 0.0, "r_thigh_joint": 0.0,
+    "r_calf_joint": 1.2, "r_ankle_pitch_joint": 0.6, "r_ankle_roll_joint": 0.0,
     "l_shoulder_pitch_joint": 1.57, "l_shoulder_roll_joint": 1.22,
     "l_upper_arm_joint": 0.0, "l_elbow_joint": 0.0,
-    "r_shoulder_pitch_joint": 1.57, "r_shoulder_roll_joint": -1.22,
+    "r_shoulder_pitch_joint": -1.57, "r_shoulder_roll_joint": -1.22,
     "r_upper_arm_joint": 0.0, "r_elbow_joint": 0.0,
 }
 

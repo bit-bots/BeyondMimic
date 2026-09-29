@@ -17,8 +17,9 @@ smoothly (no abrupt velocity jump). Output goes to <input>_walkready.csv.
                    (e.g. lying supine): the joints reach walkready while the body stays on
                    its back, exactly as the motion already has it.
 
-The walkready pose is written so that scripts/csv_to_npz.py (which sign-flips the
-joints in INV) reproduces the SIM-convention targets in WALKREADY_SIM.
+The walkready pose is written directly in the SIM convention of WALKREADY_SIM:
+GMR retargets against the bitbots MJCF, so CSV and sim share one convention and
+scripts/csv_to_npz.py passes the joints through unflipped.
 
 Examples
 --------
@@ -50,14 +51,10 @@ CSV_JOINTS = [
     "l_shoulder_pitch", "l_shoulder_roll", "l_upper_arm", "l_elbow",
     "r_shoulder_pitch", "r_shoulder_roll", "r_upper_arm", "r_elbow",
 ]
-# Joints whose sign csv_to_npz.py flips (GMR <-> sim). Must match that script.
-INV = [
-    "l_thigh", "l_calf", "r_hip_pitch", "r_thigh", "r_ankle_pitch",
-    "l_upper_arm", "r_shoulder_pitch", "r_upper_arm", "r_elbow",
-]
-# walkready joint targets in SIM convention (radians).
-# make_walkready() sign-flips the INV joints to
-# write CSV convention, and csv_to_npz.py flips them back to exactly these sim values.
+# walkready joint targets in SIM convention (radians). CSV convention is the same
+# one -- GMR retargets against the bitbots MJCF -- so these are written as-is and
+# csv_to_npz.py reproduces them unchanged. Must match PI_FOOTBALL_WALKREADY in
+# scripts/smplx_to_pi_plus.py.
 WALKREADY_SIM = {
     "r_hip_pitch": 0.6, "r_hip_roll": 0.0, "r_thigh": 0.0, "r_calf": 1.2,
     "r_ankle_pitch": 0.6, "r_ankle_roll": 0.0,
@@ -155,9 +152,8 @@ def make_walkready(src, joint_only=False):
     """
     joints = np.zeros(len(CSV_JOINTS))
     for k, j in enumerate(CSV_JOINTS):
-        if j in WALKREADY_SIM:  # fixed target: sim -> csv (negate the inverted ones)
-            v = WALKREADY_SIM[j]
-            joints[k] = -v if j in INV else v
+        if j in WALKREADY_SIM:  # fixed target (sim convention == csv convention)
+            joints[k] = WALKREADY_SIM[j]
         else:  # fallback for any joint without a target: keep the source frame's value
             joints[k] = src[7 + k]
     if joint_only:
@@ -251,7 +247,7 @@ def verify(seq, data, meta, args, header):
     out = np.column_stack([np.arange(len(seq)), seq])
 
     def to_sim(rj):
-        return {j: (-rj[k] if j in INV else rj[k]) for k, j in enumerate(CSV_JOINTS)}
+        return dict(zip(CSV_JOINTS, rj))
 
     def legs_ok(simvals):
         return all(abs(simvals[j] - t) < 1e-9 for j, t in zip(_VERIFY_ORDER, args.walkready_state))

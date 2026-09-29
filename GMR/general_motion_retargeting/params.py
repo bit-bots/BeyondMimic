@@ -3,6 +3,9 @@ import pathlib
 HERE = pathlib.Path(__file__).parent
 IK_CONFIG_ROOT = HERE / "ik_configs"
 ASSET_ROOT = HERE / ".." / "assets"
+# This GMR copy is vendored inside the BeyondMimic repo, so pi_football's model can
+# come from the repo's own robot assets -- see the pi_football entry below.
+REPO_ROOT = HERE.parent.parent
 
 ROBOT_XML_DICT = {
     "unitree_g1": ASSET_ROOT / "unitree_g1" / "g1_mocap_29dof.xml",
@@ -21,7 +24,17 @@ ROBOT_XML_DICT = {
     "booster_k1": ASSET_ROOT / "booster_k1" / "K1_serial.xml",
     "pnd_adam_lite": ASSET_ROOT / "pnd_adam_lite" / "scene.xml",
 
-    "pi_football": ASSET_ROOT / "pi_plus_24dof_250826" /"xml"/ "pi_22dof_0826.xml",
+    # The bitbots Pi Plus, from this repo's own assets instead of GMR's bundled
+    # pi_plus_24dof_250826 demo model. The two are rotationally IDENTICAL (0.000 deg
+    # over 1000 random configurations) apart from an axis-sign flip on 9 joints --
+    # the flip csv_to_npz.py used to undo via "joint_inversions". Retargeting
+    # against this model emits those signs directly, so no downstream flip is
+    # needed. Geometry differs only by <=1.5 mm rounding, except l/r_wrist_link
+    # (4.2 cm): the bundled model is the 24-DoF variant with wrist joints, which
+    # the bitbots robot does not have.
+    "pi_football": REPO_ROOT / "source" / "whole_body_tracking" / "whole_body_tracking"
+                   / "assets" / "hightorque" / "pi_plus_bitbots" / "mjcf"
+                   / "pi_plus_22dof.xml",
 
 
 

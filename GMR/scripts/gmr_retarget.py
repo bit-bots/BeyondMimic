@@ -19,22 +19,11 @@ Usage (gmr env; paths below are relative to the repo root):
   pixi run -e gmr python GMR/scripts/gmr_retarget.py --start 900 --end 3900
   pixi run -e gmr python GMR/scripts/gmr_retarget.py --bvh /path/to/cmu_kick.bvh --out out.npz
 
-ROBOT_XML below points at this repo's bitbots Pi Plus MJCF
-(assets/hightorque/pi_plus_bitbots/mjcf/pi_plus_22dof.xml), verified (via a
-1000-random-config FK comparison) to exactly match the real robot's URDF --
-unlike general_motion_retargeting's own bundled pi_football demo XML
-(assets/pi_plus_24dof_250826/xml/pi_22dof_0826.xml), which uses a different,
-non-mirrored axis/ref convention on several hip/calf/ankle and arm joints.
-If you're retargeting to a different Pi Plus MJCF, point ROBOT_XML at your
-own model instead; the IK config's offset_quat values
-(ik_configs/bvh_to_pi_football.json) assume the mirrored
-shoulder-pitch/elbow convention of the XML below.
-
-NOTE: only this script uses that MJCF. GMR's package default
-(params.ROBOT_XML_DICT["pi_football"]) still points at the bundled demo XML,
-because scripts/csv_to_npz.py's "joint_inversions" list converts from that
-XML's convention into the bitbots one -- switching the package default
-requires dropping those inversions in the same step.
+The model is GMR's pi_football entry, which this repo points at its own
+bitbots Pi Plus MJCF (assets/hightorque/pi_plus_bitbots/mjcf/pi_plus_22dof.xml)
+-- verified via a 1000-random-config FK comparison to match the real robot's
+URDF exactly, unlike GMR's bundled pi_plus_24dof_250826 demo model. See
+general_motion_retargeting/params.py for the details of that switch.
 """
 
 from __future__ import annotations
@@ -46,16 +35,10 @@ import general_motion_retargeting.params as gmr_params
 import mujoco as mj
 import numpy as np
 
-# Point GMR's pi_football entry at the verified-correct Pi Plus MJCF. Must
-# happen before GMR reads ROBOT_XML_DICT (mutating the shared dict is enough).
-# See the module docstring above for why this isn't general_motion_retargeting's
-# own bundled demo XML.
-ROBOT_XML = str(
-  Path(__file__).resolve().parents[2]
-  / "source/whole_body_tracking/whole_body_tracking/assets/hightorque"
-  / "pi_plus_bitbots/mjcf/pi_plus_22dof.xml"
-)
-gmr_params.ROBOT_XML_DICT["pi_football"] = ROBOT_XML
+# GMR's pi_football entry already points at this repo's bitbots Pi Plus MJCF
+# (see general_motion_retargeting/params.py), so no override is needed here --
+# this is just the same path, for the log line below.
+ROBOT_XML = str(gmr_params.ROBOT_XML_DICT["pi_football"])
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR  # noqa: E402
 from general_motion_retargeting.utils.bvh import load_bvh_file  # noqa: E402

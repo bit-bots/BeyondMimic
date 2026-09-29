@@ -175,24 +175,14 @@ ROBOT_CONFIGS = {
             "r_upper_arm_joint",
             "r_elbow_joint",
         ],
-        # Joints whose rotation axis is inverted in the bitbots URDF (pi_plus_22dof.urdf)
-        # relative to the GMR retargeting XML (pi_22dof_0826.xml). Derived from axis-sign
-        # comparison; applied before joint_offsets.
-        "joint_inversions": [
-            "l_thigh_joint",
-            "l_calf_joint",
-            "r_hip_pitch_joint",
-            "r_thigh_joint",
-            "r_ankle_pitch_joint",
-            "l_upper_arm_joint",
-            "r_shoulder_pitch_joint",
-            "r_upper_arm_joint",
-            "r_elbow_joint",
-        ],
-        # No additive offsets: the shoulder joint-frame rpy in the URDF and the
-        # ref="±1.5708" in the GMR XML are equivalent representations of the same
-        # rest rotation and cancel out exactly (verified by FK comparison). The
-        # axis-sign differences are fully handled by joint_inversions above.
+        # No sign flips and no additive offsets: GMR retargets against this repo's
+        # bitbots MJCF (see GMR/general_motion_retargeting/params.py), so the CSV is
+        # already in the URDF's own convention. There used to be a "joint_inversions"
+        # list here, undoing the axis-sign flip on 9 joints between the bitbots URDF
+        # and GMR's bundled pi_22dof_0826.xml; pointing GMR at the bitbots model
+        # removed the difference at the source. The shoulder joint-frame rpy in the
+        # URDF and the ref="±1.5708" in the MJCF are equivalent representations of the
+        # same rest rotation and cancel out exactly (verified by FK comparison).
         "joint_offsets": {},
     },
     # "pi_plus_head": {
@@ -351,9 +341,11 @@ class MotionLoader:
         else:
             self.motion_dof_poss_input = motion[:, 7:]
 
-        # Flip sign of joints whose rotation axis is inverted in the target URDF
-        # relative to the GMR retargeting XML. Applied BEFORE offsets so the
-        # joint_offsets below keep defining the home pose (sign-independent at q=0).
+        # Optional per-robot hook: flip the sign of joints whose rotation axis is
+        # inverted in the target URDF relative to the XML the motion was retargeted
+        # against. Applied BEFORE offsets so the joint_offsets below keep defining
+        # the home pose (sign-independent at q=0). No robot needs it at the moment
+        # -- pi_plus is retargeted against its own MJCF, see its config above.
         joint_inversions = self.robot_config.get("joint_inversions", None)
         if joint_inversions:
             joint_names = self.robot_config["joint_names"]
