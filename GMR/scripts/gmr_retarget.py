@@ -16,18 +16,26 @@ which):
   3. Convert to whatever downstream training format you need (e.g.
      AMP_mjlab's scripts/piplus_gmr_to_amp.py for AMP-style motion imitation).
 
-Usage (GMR venv; run from the directory containing both gmrvenv/ and BeyondMimic/):
-  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_retarget.py --start 900 --end 3900
-  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_retarget.py --bvh /path/to/cmu_kick.bvh --out out.npz
+Usage (gmr env; paths below are relative to the repo root):
+  pixi run -e gmr python GMR/scripts/gmr_retarget.py --start 900 --end 3900
+  pixi run -e gmr python GMR/scripts/gmr_retarget.py --bvh /path/to/cmu_kick.bvh --out out.npz
 
-ROBOT_XML below points at a specific downstream project's Pi Plus MJCF,
-verified (via a 1000-random-config FK comparison) to exactly match the real
-robot's URDF -- unlike general_motion_retargeting's own bundled pi_football
-demo XML, which uses a different, non-matching axis/ref convention on
-several joints. If you're retargeting to a different Pi Plus MJCF, point
-ROBOT_XML at your own model instead; the IK config's offset_quat values
-(ik_configs/bvh_to_pi_football.json) assume this project's mirrored
-shoulder-pitch/elbow convention.
+ROBOT_XML below points at this repo's bitbots Pi Plus MJCF
+(assets/hightorque/pi_plus_bitbots/mjcf/pi_plus_22dof.xml), verified (via a
+1000-random-config FK comparison) to exactly match the real robot's URDF --
+unlike general_motion_retargeting's own bundled pi_football demo XML
+(assets/pi_plus_24dof_250826/xml/pi_22dof_0826.xml), which uses a different,
+non-mirrored axis/ref convention on several hip/calf/ankle and arm joints.
+If you're retargeting to a different Pi Plus MJCF, point ROBOT_XML at your
+own model instead; the IK config's offset_quat values
+(ik_configs/bvh_to_pi_football.json) assume the mirrored
+shoulder-pitch/elbow convention of the XML below.
+
+NOTE: only this script uses that MJCF. GMR's package default
+(params.ROBOT_XML_DICT["pi_football"]) still points at the bundled demo XML,
+because scripts/csv_to_npz.py's "joint_inversions" list converts from that
+XML's convention into the bitbots one -- switching the package default
+requires dropping those inversions in the same step.
 """
 
 from __future__ import annotations
@@ -44,7 +52,11 @@ from scipy.spatial.transform import Rotation as R, Slerp
 # happen before GMR reads ROBOT_XML_DICT (mutating the shared dict is enough).
 # See the module docstring above for why this isn't general_motion_retargeting's
 # own bundled demo XML.
-ROBOT_XML = "/homes/17vahl/smp/smp/src/smp/robot/piplus/piplus.xml"
+ROBOT_XML = str(
+  Path(__file__).resolve().parents[2]
+  / "source/whole_body_tracking/whole_body_tracking/assets/hightorque"
+  / "pi_plus_bitbots/mjcf/pi_plus_22dof.xml"
+)
 gmr_params.ROBOT_XML_DICT["pi_football"] = ROBOT_XML
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR  # noqa: E402
