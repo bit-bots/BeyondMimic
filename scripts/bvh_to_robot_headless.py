@@ -96,16 +96,21 @@ if __name__ == "__main__":
     root_rot = np.array([qpos[3:7][[1, 2, 3, 0]] for qpos in qpos_list])
     dof_pos = np.array([qpos[7:] for qpos in qpos_list])
 
-    # GMR output order: l_leg(0-5), l_arm(6-9), r_leg(10-15), r_arm(16-19).
-    # The wrist joints were commented out of the pi XML in 64bef26, so the model
-    # went 22 -> 20 DoF and everything from index 10 on shifted down by two.
-    # Target CSV order: l_leg → r_leg → l_arm → r_arm
-    reorder_indices = (
-        [0, 1, 2, 3, 4, 5]
-        + [10, 11, 12, 13, 14, 15]
-        + [6, 7, 8, 9]
-        + [16, 17, 18, 19]
+    # Reorder GMR model dof order -> target CSV order (l_leg -> r_leg -> l_arm -> r_arm)
+    # by joint NAME, so it stays correct regardless of the model's joint set/order.
+    # GMR's pi_football model is this repo's bitbots MJCF, whose joint order differs
+    # entirely from the bundled demo model's (it starts with the right arm). The
+    # dof_pos column for a joint is its dof index minus 6 (the free base occupies
+    # dof 0-5 / qpos 0-6).
+    csv_joint_order = (
+        ['l_hip_pitch', 'l_hip_roll', 'l_thigh', 'l_calf', 'l_ankle_pitch', 'l_ankle_roll']
+        + ['r_hip_pitch', 'r_hip_roll', 'r_thigh', 'r_calf', 'r_ankle_pitch', 'r_ankle_roll']
+        + ['l_shoulder_pitch', 'l_shoulder_roll', 'l_upper_arm', 'l_elbow']
+        + ['r_shoulder_pitch', 'r_shoulder_roll', 'r_upper_arm', 'r_elbow']
     )
+    if args.keep_wrist:
+        print("[warn] --keep_wrist ignored: the pi_plus model has no wrist joints")
+    reorder_indices = [retargeter.robot_dof_names[f"{j}_joint"] - 6 for j in csv_joint_order]
     dof_pos = dof_pos[:, reorder_indices]
     # Save as CSV
     with open(args.save_path, 'w', newline='') as f:
@@ -116,18 +121,7 @@ if __name__ == "__main__":
         header.extend([f'root rot {i}' for i in ['x', 'y', 'z', 'w']])
 
         # Joint names matching reorder_indices order
-        l_arm_names = ['l_shoulder_pitch', 'l_shoulder_roll', 'l_upper_arm', 'l_elbow']
-        r_arm_names = ['r_shoulder_pitch', 'r_shoulder_roll', 'r_upper_arm', 'r_elbow']
-        if args.keep_wrist:
-            l_arm_names.append('l_wrist')
-            r_arm_names.append('r_wrist')
-        joint_names = (
-            ['l_hip_pitch', 'l_hip_roll', 'l_thigh', 'l_calf', 'l_ankle_pitch', 'l_ankle_roll']
-            + ['r_hip_pitch', 'r_hip_roll', 'r_thigh', 'r_calf', 'r_ankle_pitch', 'r_ankle_roll']
-            + l_arm_names
-            + r_arm_names
-        )
-        header.extend(joint_names)
+        header.extend(csv_joint_order)
         writer.writerow(header)
 
         # write data per frame
