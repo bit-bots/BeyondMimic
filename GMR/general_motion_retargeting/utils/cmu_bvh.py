@@ -210,6 +210,15 @@ def load_cmu_bvh_file(bvh_file, verbose=True):
         corrections[cmu_bone] = (
             g_cmu.inv() * world_rot.inv() * posture * world_rot * g_lafan
         )
+        # NOTE: LeftArm/LeftForeArm/LeftHand's ~180 deg axial-twist error (a
+        # T-pose can't observe twist, so it silently follows LAFAN1's own
+        # convention -- see the "posture" comment above) is NOT fixed here.
+        # This loader's whole job is converting CMU into LAFAN1's own bone
+        # convention, so whatever twist error LAFAN1 itself has for these
+        # bones, CMU inherits identically -- fixing it only here would make
+        # CMU and native LAFAN1 clips disagree. Fixed once, for both sources,
+        # on the l_upper_arm_link/l_elbow_link/l_wrist_link entries in
+        # ik_configs/bvh_to_pi_football.json instead.
 
     # --- resample ----------------------------------------------------------
     src_fps = 1.0 / _read_frame_time(bvh_file)
