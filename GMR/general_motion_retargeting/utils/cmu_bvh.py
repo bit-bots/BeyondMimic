@@ -31,6 +31,10 @@ from scipy.spatial.transform import Rotation as R
 
 import general_motion_retargeting.utils.lafan_vendor.utils as utils
 from general_motion_retargeting.utils.lafan_vendor.extract import read_bvh
+from general_motion_retargeting.utils.mixed_root import (
+    DEFAULT_ROOT_BLEND,
+    inject_mixed_root,
+)
 
 # CMU bone name -> LAFAN1 bone name. CMU's Spine1 is the chest: it parents Neck
 # and both shoulders, which is LAFAN1's Spine2 (CMU has no bone of that name, so
@@ -151,7 +155,7 @@ def _tpose_error_deg(pos_zup, bones):
     return worst
 
 
-def load_cmu_bvh_file(bvh_file, verbose=True):
+def load_cmu_bvh_file(bvh_file, verbose=True, root_blend=DEFAULT_ROOT_BLEND):
     """Same contract as load_lafan1_file: (list of per-frame dicts, human height).
 
     Frame 0 is consumed as the calibration T-pose and is not part of the output,
@@ -244,6 +248,8 @@ def load_cmu_bvh_file(bvh_file, verbose=True):
         # Ankle position with toe orientation, as the IK configs expect.
         result["LeftFootMod"] = (result["LeftFoot"][0], result["LeftToe"][1])
         result["RightFootMod"] = (result["RightFoot"][0], result["RightToe"][1])
+
+        inject_mixed_root(result, root_blend)
 
         frames.append(result)
 

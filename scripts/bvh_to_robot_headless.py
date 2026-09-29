@@ -2,8 +2,8 @@ import argparse
 import pathlib
 import csv
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
-from general_motion_retargeting.utils.lafan1 import load_lafan1_file
-from general_motion_retargeting.utils.cmu_bvh import is_cmu_bvh, load_cmu_bvh_file
+from general_motion_retargeting.utils.bvh import load_bvh_file
+from general_motion_retargeting.utils.mixed_root import DEFAULT_ROOT_BLEND
 from smplx_to_pi_plus import PI_FOOTBALL_WALKREADY
 from rich import print
 from tqdm import tqdm
@@ -48,6 +48,13 @@ if __name__ == "__main__":
         help="Keep l_wrist and r_wrist joint columns in CSV output. Default behavior is to drop them (bitbots pi_plus has no wrist joints).",
     )
 
+    parser.add_argument(
+        "--root_blend",
+        type=float,
+        default=DEFAULT_ROOT_BLEND,
+        help="MixedRoot orientation = slerp(Hips, Spine2, blend); 0=pelvis, 1=upper spine.",
+    )
+
     args = parser.parse_args()
 
     save_dir = os.path.dirname(args.save_path)
@@ -55,13 +62,14 @@ if __name__ == "__main__":
         os.makedirs(save_dir, exist_ok=True)
     qpos_list = []
 
-    # Load SMPLX trajectory. CMU-style skeletons (soccer_kicks) carry extra bones,
-    # a ~15.9-units-per-metre scale and different bone axes, so they go through a
-    # loader that converts them to LAFAN1 convention first.
-    if is_cmu_bvh(args.bvh_file):
-        lafan1_data_frames, actual_human_height = load_cmu_bvh_file(args.bvh_file)
-    else:
-        lafan1_data_frames, actual_human_height = load_lafan1_file(args.bvh_file)
+    # Load the BVH trajectory. load_bvh_file auto-detects the dataset: CMU-style
+    # skeletons (soccer_kicks) carry extra bones, a ~15.9-units-per-metre scale and
+    # different bone axes, so they go through a loader that converts them to LAFAN1
+    # convention first. Either way the frames come back with MixedRoot injected,
+    # which the pi_football IK config roots at.
+    lafan1_data_frames, actual_human_height = load_bvh_file(
+        args.bvh_file, root_blend=args.root_blend
+    )
 
     # Initialize the retargeting system. pi_football needs the walkready seed: the
     # shoulder rolls' ref=∓1.5708 lies outside the bitbots-derived limits, so the

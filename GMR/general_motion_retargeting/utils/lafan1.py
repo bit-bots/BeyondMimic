@@ -3,9 +3,13 @@ from scipy.spatial.transform import Rotation as R
 
 import general_motion_retargeting.utils.lafan_vendor.utils as utils
 from general_motion_retargeting.utils.lafan_vendor.extract import read_bvh
+from general_motion_retargeting.utils.mixed_root import (
+    DEFAULT_ROOT_BLEND,
+    inject_mixed_root,
+)
 
 
-def load_lafan1_file(bvh_file):
+def load_lafan1_file(bvh_file, root_blend=DEFAULT_ROOT_BLEND):
     """
     Must return a dictionary with the following structure:
     {
@@ -31,7 +35,10 @@ def load_lafan1_file(bvh_file):
         # Add modified foot pose
         result["LeftFootMod"] = (result["LeftFoot"][0], result["LeftToe"][1])
         result["RightFootMod"] = (result["RightFoot"][0], result["RightToe"][1])
-        
+
+        # Root the retarget at the pelvis, not the upper spine (see mixed_root.py).
+        inject_mixed_root(result, root_blend)
+
         frames.append(result)
     
     human_height = result["Head"][0][2] - min(result["LeftFootMod"][0][2], result["RightFootMod"][0][2])

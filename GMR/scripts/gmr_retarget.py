@@ -2,10 +2,9 @@
 
 CMU-style clips (e.g. the CMU soccer kicks) are auto-detected and loaded via
 GMR's cmu_bvh module (per-bone T-pose-calibrated correction to LAFAN1
-convention, see general_motion_retargeting/utils/cmu_bvh.py). That loader
-only emits bones it can calibrate against a T-pose, which excludes "Hips"
-(no reference T-pose orientation for it was captured) -- see
-inject_mixed_root below for how the root injection handles that.
+convention, see general_motion_retargeting/utils/cmu_bvh.py). Both datasets
+go through the shared load_bvh_file entry point, which injects the MixedRoot
+body the IK config is rooted at (see utils/mixed_root.py).
 
 Runs in the GMR venv. Saves qpos + xml path + fps for playback/preview.
 
@@ -46,7 +45,6 @@ from pathlib import Path
 import general_motion_retargeting.params as gmr_params
 import mujoco as mj
 import numpy as np
-from scipy.spatial.transform import Rotation as R, Slerp
 
 # Point GMR's pi_football entry at the verified-correct Pi Plus MJCF. Must
 # happen before GMR reads ROBOT_XML_DICT (mutating the shared dict is enough).
@@ -60,11 +58,10 @@ ROBOT_XML = str(
 gmr_params.ROBOT_XML_DICT["pi_football"] = ROBOT_XML
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR  # noqa: E402
-from general_motion_retargeting.utils.cmu_bvh import (  # noqa: E402
-  is_cmu_bvh,
-  load_cmu_bvh_file,
+from general_motion_retargeting.utils.bvh import load_bvh_file  # noqa: E402
+from general_motion_retargeting.utils.mixed_root import (  # noqa: E402
+  DEFAULT_ROOT_BLEND,
 )
-from general_motion_retargeting.utils.lafan1 import load_lafan1_file  # noqa: E402
 
 # Standing seed in ROBOT_XML's qpos convention (mirrored, in-range). Seeds the
 # IK away from the out-of-range shoulder-roll refs.
@@ -102,7 +99,7 @@ def main() -> None:
     help="shift root so the lowest FOOT geom center over all frames reaches this z",
   )
   ap.add_argument(
-    "--root-blend", type=float, default=0.5,
+    "--root-blend", type=float, default=DEFAULT_ROOT_BLEND,
     help="root orientation = slerp(Hips, Spine2, blend); 0=pelvis, 1=upper spine",
   )
   ap.add_argument(
@@ -115,8 +112,7 @@ def main() -> None:
   if args.ik_config_path is not None:
     gmr_params.IK_CONFIG_DICT["bvh"]["pi_football"] = Path(args.ik_config_path)
 
-  cmu = is_cmu_bvh(args.bvh)
-  frames, human_height = (load_cmu_bvh_file if cmu else load_lafan1_file)(args.bvh)
+  frames, human_height = load_bvh_file(args.bvh, root_blend=args.root_blend)
   end = len(frames) if args.end < 0 else min(args.end, len(frames))
   print(f"bvh {len(frames)} frames, h {human_height:.3f}; retargeting [{args.start}:{end}] "
         f"to {ROBOT_XML} (root_blend={args.root_blend})")
@@ -132,27 +128,9 @@ def main() -> None:
     use_velocity_limit=False,
   )
 
-  def inject_mixed_root(frame: dict) -> dict:
-    """Add a synthetic 'MixedRoot' body: Hips position, slerp(Hips, Spine2) rot.
-
-    load_cmu_bvh_file doesn't emit "Hips" (its per-bone correction is only derived
-    where a LAFAN1 T-pose reference orientation was captured, which excludes the
-    root). Rather than invent an uncalibrated Hips correction, CMU frames fall back
-    to Spine2 alone for MixedRoot (root_blend has no effect on those frames).
-    """
-    if "Hips" not in frame:
-      frame["MixedRoot"] = frame["Spine2"]
-      return frame
-    hips_pos, hips_q = frame["Hips"]  # quats are wxyz (scalar-first)
-    _, spine_q = frame["Spine2"]
-    key = R.from_quat(np.array([hips_q, spine_q]), scalar_first=True)
-    mixed_q = Slerp([0.0, 1.0], key)([args.root_blend])[0].as_quat(scalar_first=True)
-    frame["MixedRoot"] = (hips_pos, mixed_q)
-    return frame
-
   qpos = []
   for i in range(args.start, end):
-    qpos.append(retarget.retarget(inject_mixed_root(frames[i])).copy())
+    qpos.append(retarget.retarget(frames[i]).copy())
     if (i - args.start) % 300 == 0:
       print(f"  {i - args.start}/{end - args.start}")
   qpos = np.asarray(qpos)
