@@ -33,3 +33,15 @@ Thumbs.db
 # Local secrets / env
 .env
 .env.local
+
+# Motion pipeline intermediates (videos, GVHMR/GMR outputs, csv/json stages).
+# Only source/motion/hightorque/pi_plus/npz/ is the final output worth committing.
+# Already-tracked files in these folders stay tracked.
+RetargetData/
+GMR/RetargetData/
+GMR/MotionData/
+GVHMR/docs/example_video/
+source/motion/hightorque/pi_plus/csv/
+source/motion/hightorque/pi_plus/json/
+source/motion/hightorque/pi_plus/npz/**/*.mp4
+MUJOCO_LOG.TXT
