@@ -134,8 +134,14 @@ pixi run python scripts/csv_cut_pi_plus.py --input_csv GMR/RetargetData/lafan1/c
 pixi run python scripts/add_walkready.py GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --front --back --back-fade-start {frame} --front-fade-len 24 --back-fade-len 48 --back-fast-fade-len 30 --hold-front 6 --hold-back 30
 #   -> GMR/RetargetData/lafan1/csv/pi_plus/{xxx}_walkready.csv  (feed this as --input_file to csv_to_npz below)
 
+# (Optional) mirror left <-> right — reflects the clip through the robot's x-z plane: root y and
+# yaw/roll flip, l_*/r_* joints swap. On the bitbots Pi Plus every joint pair changes sign when
+# swapped (opposite pitch axes, shared roll/yaw axes); the script FK-checks this on the MJCF.
+# Output: <input>_mirrored.csv (or --output_csv). Feed it to csv_to_npz like any other CSV.
+pixi run python scripts/mirror_csv.py GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv
+
 # NPZ format conversion (add --headless to skip the graphical interface)
-# --input_file is the trimmed CSV from the previous step (or its _walkready variant if you ran that step).
+# --input_file is the trimmed CSV from the previous step (or its _walkready / _mirrored variant if you ran those steps).
 pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file GMR/RetargetData/lafan1/csv/pi_plus/{xxx}.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/{motion_name}
 
 # Data playback (interactive viewer; needs a display)
@@ -200,6 +206,8 @@ pixi run -e gmr python scripts/smplx_to_pi_plus.py --smplx_file RetargetData/gvh
 # 4) Trim / ground: z-offset drops the ~5 cm float (optional frame range)  [default env]
 pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/gvhmr/csv/pi_plus/tennis.csv --output_csv RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv --z_offset -0.05
 #   optional: --start_frame {n} --end_frame {m}
+#   optional: mirror left <-> right -> tennis_cut_mirrored.csv
+#   pixi run python scripts/mirror_csv.py RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv
 
 # 5) NPZ conversion -> training-ready motion  [default env]
 pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv --input_fps 30 --output_name source/motion/hightorque/pi_plus/npz/tennis
