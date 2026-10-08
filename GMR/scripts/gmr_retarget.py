@@ -33,6 +33,7 @@ shoulder-pitch/elbow convention.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import general_motion_retargeting.params as gmr_params
@@ -94,6 +95,11 @@ def main() -> None:
     help="shift root so the lowest FOOT geom center over all frames reaches this z",
   )
   ap.add_argument(
+    "--ground-lift", type=float, default=0.015,
+    help="extra constant height (m) added to the whole motion after the foot-geom "
+         "ground fix (the geom-centre fix leaves the soles ~1.5-2 cm below ground)",
+  )
+  ap.add_argument(
     "--root-blend", type=float, default=0.5,
     help="root orientation = slerp(Hips, Spine2, blend); 0=pelvis, 1=upper spine",
   )
@@ -101,6 +107,17 @@ def main() -> None:
     "--ik-config-path", default=None,
     help="override the bvh->pi_football IK config file (default: "
          "ik_configs/bvh_to_pi_football.json)",
+  )
+  ap.add_argument(
+    "--straighten-feet", type=float, default=0.0,
+    help="remove this fraction (0..1) of each foot's yaw relative to the pelvis "
+         "heading from the foot IK targets (1.0 = feet parallel to the pelvis)",
+  )
+  ap.add_argument(
+    "--straighten-mode", choices=("mean", "frame"), default="mean",
+    help="mean: remove only the clip-mean foot yaw offset (keeps the gait's natural "
+         "foot yaw changes); frame: force every frame's foot heading to the pelvis "
+         "heading (too aggressive: hip yaw up to +-140 deg, folded legs)",
   )
   args = ap.parse_args()
 
@@ -146,15 +163,68 @@ def main() -> None:
     frame["MixedRoot"] = (hips_pos, mixed_q)
     return frame
 
+  ik_cfg_path = (
+    Path(args.ik_config_path) if args.ik_config_path is not None
+    else Path(gmr_params.IK_CONFIG_DICT["bvh"]["pi_football"])
+  )
+  ik_cfg = json.load(open(ik_cfg_path))["ik_match_table1"]
+
+  def _offset_rot(robot_body: str) -> R:
+    return R.from_quat(ik_cfg[robot_body][4], scalar_first=True)
+
+  def _heading(rot: R) -> float:
+    """Yaw (rad) of the body's +x axis in the world xy-plane."""
+    v = rot.apply([1.0, 0.0, 0.0])
+    return float(np.arctan2(v[1], v[0]))
+
+  # Human foot frame -> IK target frame (the robot link) is rot * offset_quat, so
+  # the robot foot heading is read from that composed rotation.
+  _FOOT_KEYS = {"LeftFootMod": "l_ankle_roll_link", "RightFootMod": "r_ankle_roll_link"}
+
+  def _foot_deltas(frame: dict) -> dict:
+    """Per foot: wrapped (pelvis heading - foot heading) in rad."""
+    root_rot = R.from_quat(frame["MixedRoot"][1], scalar_first=True) * _offset_rot("base_link")
+    h_root = _heading(root_rot)
+    out = {}
+    for key, link in _FOOT_KEYS.items():
+      foot_rot = R.from_quat(frame[key][1], scalar_first=True)
+      out[key] = (h_root - _heading(foot_rot * _offset_rot(link)) + np.pi) % (2 * np.pi) - np.pi
+    return out
+
+  mean_delta = {k: 0.0 for k in _FOOT_KEYS}
+  if args.straighten_feet > 0.0 and args.straighten_mode == "mean":
+    ds = [_foot_deltas(inject_mixed_root(dict(frames[i]))) for i in range(args.start, end)]
+    for k in _FOOT_KEYS:
+      z = np.mean(np.exp(1j * np.array([d[k] for d in ds])))  # circular mean
+      mean_delta[k] = float(np.angle(z))
+    print("foot yaw offset removed (pelvis heading - foot heading, deg): "
+          + ", ".join(f"{k} {np.degrees(v):+.1f}" for k, v in mean_delta.items()))
+
+  def straighten_feet(frame: dict) -> dict:
+    """Rotate each foot target about world z. mode 'frame': so the foot heading
+    equals the pelvis heading; mode 'mean': by the clip-mean offset only. Scaled by
+    args.straighten_feet. Foot pitch/roll are kept."""
+    deltas = _foot_deltas(frame) if args.straighten_mode == "frame" else mean_delta
+    for key in _FOOT_KEYS:
+      pos, quat = frame[key]
+      new_rot = R.from_euler("z", args.straighten_feet * deltas[key]) * R.from_quat(quat, scalar_first=True)
+      frame[key] = (pos, new_rot.as_quat(scalar_first=True))
+    return frame
+
   qpos = []
   for i in range(args.start, end):
-    qpos.append(retarget.retarget(inject_mixed_root(frames[i])).copy())
+    fr = inject_mixed_root(frames[i])
+    if args.straighten_feet > 0.0:
+      fr = straighten_feet(fr)
+    qpos.append(retarget.retarget(fr).copy())
     if (i - args.start) % 300 == 0:
       print(f"  {i - args.start}/{end - args.start}")
   qpos = np.asarray(qpos)
 
   # Ground-height fix based on FOOT geoms only (ankle_roll bodies), so an outlier
-  # geom elsewhere doesn't over-lift the robot.
+  # geom elsewhere doesn't over-lift the robot. The geom CENTRES are used (not the
+  # sole), which leaves the soles about 1.5-2 cm below the ground; --ground-lift
+  # raises the whole motion by a constant to compensate.
   model = mj.MjModel.from_xml_path(retarget.xml_file)
   data = mj.MjData(model)
   foot_geoms = [
@@ -168,9 +238,9 @@ def main() -> None:
     mj.mj_forward(model, data)
     per_frame_min[k] = float(data.geom_xpos[foot_geoms, 2].min())
   # Robust reference: 25th percentile of per-frame lowest foot (the typical
-  # stance level), not the single deepest frame — avoids over-lifting.
+  # stance level), not the single deepest frame -- avoids over-lifting.
   ref = float(np.percentile(per_frame_min, 25))
-  shift = args.foot_target_z - ref
+  shift = args.foot_target_z - ref + args.ground_lift
   qpos[:, 2] += shift
   print(f"height adjust (feet p25): ref {ref:.3f} (min {per_frame_min.min():.3f}) "
         f"-> shift {shift:+.3f}")
