@@ -123,6 +123,9 @@ class GeneralMotionRetargeting:
                     continue
                 q[self.model.jnt_qposadr[jid]] = val
             self.configuration.update(q=q)
+        # The floating base is placed onto the first frame's root target on the first
+        # retarget() call; see seed_root_from_targets.
+        self.root_seeded = False
 
         self.tasks1 = []
         self.tasks2 = []
@@ -187,9 +190,32 @@ class GeneralMotionRetargeting:
                 task.set_target(mink.SE3.from_rotation_and_translation(mink.SO3(rot), pos))
             
             
+    def seed_root_from_targets(self):
+        """Put the floating base onto the root target before the very first solve.
+
+        Otherwise the base starts at the model's qpos0 (facing +x at the origin). A
+        clip whose first frame faces the other way then asks the IK for a ~180 deg
+        base rotation, where the orientation error gives no usable direction: the
+        robot rolls over and settles in a twisted minimum (hips and elbows pinned at
+        their limits) that it never leaves again. Only the base is set; the joints
+        keep their seed (init_qpos).
+        """
+        self.root_seeded = True
+        if self.model.jnt_type[0] != mj.mjtJoint.mjJNT_FREE:
+            return
+        if self.robot_root_name not in self.ik_match_table1:
+            return
+        pos, quat = self.scaled_human_data[self.ik_match_table1[self.robot_root_name][0]]
+        q = self.configuration.data.qpos.copy()
+        q[0:3] = pos
+        q[3:7] = quat  # wxyz, like MuJoCo's free joint
+        self.configuration.update(q=q)
+
     def retarget(self, human_data, offset_to_ground=False):
         # Update the task targets
         self.update_targets(human_data, offset_to_ground)
+        if not self.root_seeded:
+            self.seed_root_from_targets()
 
         if self.use_ik_match_table1:
             # Solve the IK problem

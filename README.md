@@ -193,19 +193,17 @@ later retarget/trim/convert steps reuse the `gmr` and `default` envs.
 pixi run -e gvhmr gvhmr-demo --video docs/example_video/tennis.mp4
 #   -> GVHMR/outputs/demo/tennis/hmr4d_results.pt
 
-# 2) Bridge: GVHMR .pt -> AMASS-style SMPL-X .npz  [gmr env]
-#    GVHMR's world frame is y-up, AMASS/SMPL-X is z-up -> rotate +90 about X.
-pixi run -e gmr python scripts/gvhmr_to_smplx.py GVHMR/outputs/demo/tennis/hmr4d_results.pt --output RetargetData/gvhmr/smplx/tennis.npz --rot_axis x --rot_deg 90
+# 2) GVHMR .pt -> LAFAN1-style .bvh  [gmr env]
+#    --fps = fps of the source video (e.g. 60 for phone clips).
+pixi run -e gmr python scripts/smplx_to_lafan_bvh.py GVHMR/outputs/demo/tennis/hmr4d_results.pt --fps 30 -o RetargetData/gvhmr/bvh/tennis.bvh
 
-# 3) Retarget: SMPL-X .npz -> pi_plus CSV (20 DOF)  [gmr env]
-#    smplx_to_pi_plus.py opens the MuJoCo GUI viewer by default, which fails on a
-#    headless host with: "Could not initialize GLFW". Add --headless to skip the
-#    viewer entirely (no display / no X11 / no xvfb needed) — same CSV output.
-pixi run -e gmr python scripts/smplx_to_pi_plus.py --smplx_file RetargetData/gvhmr/smplx/tennis.npz --save_path RetargetData/gvhmr/csv/pi_plus/tennis.csv --headless
+# 3) Retarget: .bvh -> pi_plus CSV (20 DOF), same as for lafan1  [gmr env]
+#    (bvh_to_robot.py instead of the headless variant opens the viewer)
+pixi run -e gmr python scripts/bvh_to_robot_headless.py --bvh_file RetargetData/gvhmr/bvh/tennis.bvh --robot pi_football --save_path RetargetData/gvhmr/csv/pi_plus/tennis.csv
 
-# 4) Trim / ground: z-offset drops the ~5 cm float (optional frame range)  [default env]
-pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/gvhmr/csv/pi_plus/tennis.csv --output_csv RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv --z_offset -0.05
-#   optional: --start_frame {n} --end_frame {m}
+# 4) Trim  [default env]
+pixi run python scripts/csv_cut_pi_plus.py --input_csv RetargetData/gvhmr/csv/pi_plus/tennis.csv --output_csv RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv
+#   optional: --start_frame {n} --end_frame {m} --z_offset {dz}
 #   optional: mirror left <-> right -> tennis_cut_mirrored.csv
 #   pixi run python scripts/mirror_csv.py RetargetData/gvhmr/csv/pi_plus/tennis_cut.csv
 
@@ -216,15 +214,13 @@ pixi run python scripts/csv_to_npz.py --robot pi_plus --input_file RetargetData/
 From step 5 on, the `.npz` is identical to a lafan1-derived motion — replay / train / evaluate it
 with the same commands as above.
 
-> **Storage layout.** GVHMR artifacts mirror the lafan1 convention: the (robot-agnostic) SMPL-X bridge
-> output goes to `RetargetData/gvhmr/smplx/`, the pi_plus CSVs (raw + `_cut`) to
+> **Storage layout.** GVHMR artifacts mirror the lafan1 convention: the (robot-agnostic) BVH
+> goes to `RetargetData/gvhmr/bvh/`, the pi_plus CSVs (raw + `_cut`) to
 > `RetargetData/gvhmr/csv/pi_plus/`, and the final training NPZ to `source/motion/hightorque/pi_plus/npz/`.
 
 **Notes:**
-- The y-up→z-up rotation (`--rot_axis x --rot_deg 90`) is GVHMR-specific. Verify the figure stands
-  upright by running step 3 without `--save_path` and without `--headless` (opens the viewer); if it
-  lies down / is upside down, adjust `--rot_deg`. This visual check needs a display — on a headless
-  host either retarget with `--headless` and inspect the result after step 5 via `replay_npz.py --headless --video`.
+- To check the result visually, run step 3 with `bvh_to_robot.py` (needs a display), or on a headless
+  host inspect it after step 5 via `replay_npz.py --headless --video`.
 - For a moving/handheld camera GVHMR uses its default SimpleVO. `--static_cam` (tripod) and
   `--use_dpvo` (needs compiling the optional DPVO submodule) are alternatives — see `tools/demo/demo.py`.
 - `csv_to_npz.py` applies the pi_plus URDF axis inversions automatically — no manual sign flips needed.

@@ -26,6 +26,56 @@ import torch
 from scipy.spatial.transform import Rotation as R
 from rich import print
 
+NUM_BETAS = 16
+
+
+def load_gvhmr(pt_file, frame="global", fps=30.0, gender="neutral", rot_axis="x", rot_deg=0.0):
+    """GVHMR hmr4d_results.pt -> AMASS-style SMPL-X dict (the keys/dtypes this script saves)."""
+    key = f"smpl_params_{frame}"
+
+    data = torch.load(pt_file, map_location="cpu")
+    if key not in data:
+        raise KeyError(f"'{key}' not found in {pt_file}. Available: {list(data.keys())}")
+    p = data[key]
+
+    # GVHMR SMPL-X params -> numpy
+    global_orient = p["global_orient"].detach().cpu().numpy().astype(np.float64)  # (N, 3) axis-angle
+    body_pose = p["body_pose"].detach().cpu().numpy().astype(np.float32)           # (N, 63)
+    transl = p["transl"].detach().cpu().numpy().astype(np.float64)                 # (N, 3)
+    betas = p["betas"].detach().cpu().numpy().astype(np.float32)                   # (N, 10)
+
+    num_frames = body_pose.shape[0]
+    print(f"[bold]Loaded[/bold] {key}: {num_frames} frames, body_pose {body_pose.shape}, betas {betas.shape}")
+
+    # World up-axis alignment: rotate trans (vectors) and global_orient (orientation),
+    # leaving body_pose untouched (it is relative to the root).
+    if rot_deg != 0.0:
+        R_align = R.from_euler(rot_axis, rot_deg, degrees=True)
+        transl = R_align.apply(transl)
+        global_orient = (R_align * R.from_rotvec(global_orient)).as_rotvec()
+        print(f"[yellow]Applied world rotation[/yellow]: {rot_deg}deg about {rot_axis}")
+    else:
+        print("[dim]No world rotation applied (use --rot_deg/--rot_axis if the figure is tilted/lying down).[/dim]")
+
+    # betas: GVHMR gives (N, 10) ~constant -> mean over frames -> (10,).
+    # The SMPL-X model used by smplx_to_pi_plus.py has num_betas=16 (AMASS convention),
+    # so zero-pad the 10 GVHMR betas to 16 (the extra coeffs carry no shape info).
+    betas_mean = betas.mean(axis=0).astype(np.float32)  # (10,)
+    if betas_mean.shape[0] < NUM_BETAS:
+        betas_mean = np.concatenate(
+            [betas_mean, np.zeros(NUM_BETAS - betas_mean.shape[0], dtype=np.float32)]
+        )  # (16,)
+
+    return dict(
+        gender=np.array(gender),
+        betas=betas_mean,                                # (16,)
+        root_orient=global_orient.astype(np.float32),    # (N, 3)
+        pose_body=body_pose,                             # (N, 63)
+        trans=transl.astype(np.float32),                 # (N, 3)
+        mocap_frame_rate=np.float64(fps),
+    )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=str, help="Path to GVHMR hmr4d_results.pt")
@@ -49,51 +99,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    key = f"smpl_params_{args.frame}"
-
-    data = torch.load(args.input, map_location="cpu")
-    if key not in data:
-        raise KeyError(f"'{key}' not found in {args.input}. Available: {list(data.keys())}")
-    p = data[key]
-
-    # GVHMR SMPL-X params -> numpy
-    global_orient = p["global_orient"].detach().cpu().numpy().astype(np.float64)  # (N, 3) axis-angle
-    body_pose = p["body_pose"].detach().cpu().numpy().astype(np.float32)           # (N, 63)
-    transl = p["transl"].detach().cpu().numpy().astype(np.float64)                 # (N, 3)
-    betas = p["betas"].detach().cpu().numpy().astype(np.float32)                   # (N, 10)
-
-    num_frames = body_pose.shape[0]
-    print(f"[bold]Loaded[/bold] {key}: {num_frames} frames, body_pose {body_pose.shape}, betas {betas.shape}")
-
-    # World up-axis alignment: rotate trans (vectors) and global_orient (orientation),
-    # leaving body_pose untouched (it is relative to the root).
-    if args.rot_deg != 0.0:
-        R_align = R.from_euler(args.rot_axis, args.rot_deg, degrees=True)
-        transl = R_align.apply(transl)
-        global_orient = (R_align * R.from_rotvec(global_orient)).as_rotvec()
-        print(f"[yellow]Applied world rotation[/yellow]: {args.rot_deg}deg about {args.rot_axis}")
-    else:
-        print("[dim]No world rotation applied (use --rot_deg/--rot_axis if the figure is tilted/lying down).[/dim]")
-
-    # betas: GVHMR gives (N, 10) ~constant -> mean over frames -> (10,).
-    # The SMPL-X model used by smplx_to_pi_plus.py has num_betas=16 (AMASS convention),
-    # so zero-pad the 10 GVHMR betas to 16 (the extra coeffs carry no shape info).
-    NUM_BETAS = 16
-    betas_mean = betas.mean(axis=0).astype(np.float32)  # (10,)
-    if betas_mean.shape[0] < NUM_BETAS:
-        betas_mean = np.concatenate(
-            [betas_mean, np.zeros(NUM_BETAS - betas_mean.shape[0], dtype=np.float32)]
-        )  # (16,)
+    smplx_data = load_gvhmr(args.input, args.frame, args.fps, args.gender, args.rot_axis, args.rot_deg)
 
     out_path = pathlib.Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(
-        out_path,
-        gender=args.gender,
-        betas=betas_mean,                                # (10,)
-        root_orient=global_orient.astype(np.float32),    # (N, 3)
-        pose_body=body_pose,                             # (N, 63)
-        trans=transl.astype(np.float32),                 # (N, 3)
-        mocap_frame_rate=np.float64(args.fps),
-    )
+    np.savez(out_path, **smplx_data)
     print(f"[green]Saved[/green] {out_path}  (fps={args.fps}, gender={args.gender})")
