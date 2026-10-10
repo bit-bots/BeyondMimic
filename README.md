@@ -149,6 +149,9 @@ pixi run python scripts/replay_npz.py --robot pi_plus --motion_file source/motio
 
 # Data playback -> render to mp4 (works headless)
 pixi run python scripts/replay_npz.py --robot pi_plus --motion_file source/motion/hightorque/pi_plus/npz/{motion_name}.npz --headless --video
+
+# Data playback in the browser (headless host; all NPZs + matching source video, port-forward 8080)
+python3 scripts/npz_web_viewer.py --port 8080   # then: ssh -N -L 8080:localhost:8080 <host>, open http://localhost:8080
 ```
 
 `replay_npz.py` can render the motion to an mp4 instead of (or in addition to) the live
