@@ -1,12 +1,12 @@
 """Viser preview of a GMR-retargeted Pi Plus qpos sequence (raw mujoco model).
 
-Runs in the GMR venv (mujoco + viser). Renders the pi_football visual mesh geoms
+Runs in the pixi gmr env (mujoco + viser). Renders the pi_football visual mesh geoms
 and plays back the retargeted qpos so the retarget can be eyeballed for the torso
 orientation and left/right symmetry.
 
-Usage (GMR venv; run from the directory containing both gmrvenv/ and BeyondMimic/):
-  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_viz.py --npz /path/to/retarget_output.npz --port 8080
-  gmrvenv/bin/python BeyondMimic/GMR/scripts/gmr_viz.py --npz /path/to/dir_of_npz --port 8080
+Usage (from the repo root):
+  pixi run -e gmr python GMR/scripts/gmr_viz.py --npz /path/to/retarget_output.npz --port 8080
+  pixi run -e gmr python GMR/scripts/gmr_viz.py --npz /path/to/dir_of_npz --port 8080
 
 If --npz is a directory, the viewer shows one button per clip. All clips
 must use the same robot XML.
